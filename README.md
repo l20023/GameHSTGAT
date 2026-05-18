@@ -95,4 +95,3 @@ HST reference bound used in code:
 Each metrics file contains condition-level outputs (`epsilon(t)`, beta fit, final train loss).
 
 For a full technical walkthrough of the model and design decisions, see `MODEL_README.md`.
-For release hygiene and pre-share checks, see `RELEASE_CHECKLIST.md`.
