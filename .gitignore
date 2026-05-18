@@ -1,0 +1,43 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+
+# OS / editor noise
+.DS_Store
+.idea/
+
+# Cursor / VSCode local state
+.cursor/
+.vscode/
+
+# Experiment outputs and local artifacts
+artifacts/
+*.pt
+*.pth
+*.ckpt
+*.log
+
+# W&B local run files
+wandb/
+
+# Secrets / env files
+.env
+.env.*
+!.env.example
