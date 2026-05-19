@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.graph_generator import GraphGenerator
 from src.config import load_yaml_config, merge_flat_config
 from src.logging_utils import finish_wandb_run, init_wandb_run, log_condition_metrics
+from src.learning_rate_plots import learning_rate_plot_path, save_learning_rate_plot
 from src.training_pipeline import condition_result_to_dict, run_condition_experiment
 
 
@@ -33,7 +34,7 @@ DEFAULT_RUN_CONFIG: dict[str, Any] = {
     "artifacts_dir": "artifacts/training_metrics",
     "train_episodes": 5000,
     "test_episodes": 1000,
-    "max_horizon": 50,
+    "max_horizon": 100,
     "signal_quality": 0.8,
     "learning_rate": 0.001,
     "hidden_dim": 32,
@@ -41,6 +42,9 @@ DEFAULT_RUN_CONFIG: dict[str, Any] = {
     "communication_mode": "fair_1bit",
     "communication_dim": None,
     "disable_beta_fit": False,
+    "save_train_loss_history": False,
+    "save_epsilon_series": False,
+    "save_learning_rate_plots": True,
 }
 
 
@@ -72,6 +76,9 @@ def run_single_seed(
     communication_dim: int | None,
     learning_rate: float,
     disable_beta_fit: bool,
+    save_train_loss_history: bool,
+    save_epsilon_series: bool,
+    save_learning_rate_plots: bool,
 ) -> dict:
     """Run full train/eval pipeline for one seed across all graph conditions."""
     set_global_seed(seed)
@@ -95,6 +102,9 @@ def run_single_seed(
         "communication_dim": communication_dim,
         "learning_rate": learning_rate,
         "disable_beta_fit": disable_beta_fit,
+        "save_train_loss_history": save_train_loss_history,
+        "save_epsilon_series": save_epsilon_series,
+        "save_learning_rate_plots": save_learning_rate_plots,
     }
     wandb_run = init_wandb_run(
         project=wandb_project,
@@ -123,7 +133,28 @@ def run_single_seed(
                     seed=seed,
                     disable_beta_fit=disable_beta_fit,
                 )
-                condition_metrics = condition_result_to_dict(result)
+                condition_metrics = condition_result_to_dict(
+                    result,
+                    save_train_loss_history=save_train_loss_history,
+                    save_epsilon_series=save_epsilon_series,
+                )
+                if save_learning_rate_plots:
+                    plot_path = learning_rate_plot_path(
+                        artifacts_dir=artifacts_dir,
+                        seed=seed,
+                        condition_key=key,
+                    )
+                    save_learning_rate_plot(
+                        output_path=plot_path,
+                        epsilon_series=result.epsilon_series,
+                        beta_fit=result.beta_fit,
+                        beta_hst_max=result.beta_hst_max,
+                        condition_key=key,
+                        signal_quality=signal_quality,
+                        beta_gap=result.beta_gap,
+                        exceeds_hst_bound=result.exceeds_hst_bound,
+                    )
+                    condition_metrics["learning_rate_plot"] = str(plot_path)
                 per_condition_metrics[key] = condition_metrics
                 log_condition_metrics(
                     run=wandb_run,
@@ -277,6 +308,21 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip exponential beta fitting and only log epsilon(t).",
     )
+    parser.add_argument(
+        "--save-train-loss-history",
+        action="store_true",
+        help="Persist full per-episode train loss arrays in metrics.json.",
+    )
+    parser.add_argument(
+        "--save-epsilon-series",
+        action="store_true",
+        help="Persist full epsilon(t) arrays in metrics.json.",
+    )
+    parser.add_argument(
+        "--no-learning-rate-plots",
+        action="store_true",
+        help="Disable PNG learning-rate plots under seed_<id>/plots/.",
+    )
     return parser.parse_args()
 
 
@@ -300,6 +346,9 @@ def resolve_run_config(args: argparse.Namespace) -> dict[str, Any]:
         "communication_mode": args.communication_mode,
         "communication_dim": args.communication_dim,
         "disable_beta_fit": args.disable_beta_fit if args.disable_beta_fit else None,
+        "save_train_loss_history": args.save_train_loss_history if args.save_train_loss_history else None,
+        "save_epsilon_series": args.save_epsilon_series if args.save_epsilon_series else None,
+        "save_learning_rate_plots": False if args.no_learning_rate_plots else None,
     }
     config = merge_flat_config(
         defaults=DEFAULT_RUN_CONFIG,
@@ -338,6 +387,9 @@ def main() -> None:
         ),
         learning_rate=float(run_config["learning_rate"]),
         disable_beta_fit=bool(run_config["disable_beta_fit"]),
+        save_train_loss_history=bool(run_config["save_train_loss_history"]),
+        save_epsilon_series=bool(run_config["save_epsilon_series"]),
+        save_learning_rate_plots=bool(run_config["save_learning_rate_plots"]),
     )
     print(
         f"Finished seed={run_summary['seed']} "

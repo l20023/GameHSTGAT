@@ -4,7 +4,11 @@ import pytest
 import torch
 
 from src.graph_generator import GraphGenerator
-from src.training_pipeline import fit_beta_from_epsilon, run_condition_experiment
+from src.training_pipeline import (
+    condition_result_to_dict,
+    fit_beta_from_epsilon,
+    run_condition_experiment,
+)
 
 
 def test_fit_beta_from_synthetic_exponential_series() -> None:
@@ -21,6 +25,26 @@ def test_fit_beta_from_synthetic_exponential_series() -> None:
     assert isinstance(fit["rmse"], float)
     assert isinstance(fit["r2"], float)
     assert fit["failure_reason"] == ""
+
+
+def test_condition_result_to_dict_omits_heavy_series_by_default() -> None:
+    graph = GraphGenerator().generate_complete(8)
+    result = run_condition_experiment(
+        graph_data=graph,
+        train_episodes=2,
+        test_episodes=2,
+        max_horizon=3,
+        signal_quality=0.8,
+        hidden_dim=8,
+        num_heads=2,
+        learning_rate=0.001,
+        seed=5,
+        disable_beta_fit=True,
+    )
+    payload = condition_result_to_dict(result)
+    assert "train_loss_history" not in payload
+    assert "epsilon_series" not in payload
+    assert payload["train_loss_final"] is not None
 
 
 def test_run_condition_experiment_outputs_expected_shapes() -> None:

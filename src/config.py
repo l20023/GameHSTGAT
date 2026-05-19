@@ -37,13 +37,13 @@ def resolve_replication_seeds(
     *,
     cli_seeds: str | None = None,
     run_config: dict[str, Any] | None = None,
-    default_count: int = 10,
+    default_count: int = 3,
 ) -> list[int]:
     """
     Resolve replication seeds for grid runs.
 
     Precedence: CLI comma-list > explicit YAML ``seeds`` list > ``num_seeds`` in YAML
-    > ``default_count`` seeds ``0 .. default_count-1``.
+    > ``default_count`` seeds ``0 .. default_count-1`` (default 3).
     """
     if cli_seeds is not None and cli_seeds.strip():
         parsed = [int(item.strip()) for item in cli_seeds.split(",") if item.strip()]

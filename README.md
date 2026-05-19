@@ -19,7 +19,7 @@ The training script runs one configuration per invocation.
 - Default config highlights:
   - `wandb_project: game-theory-project`
   - `wandb_entity: GameHSTGAT`
-  - `max_horizon: 50`
+  - `max_horizon: 100`
   - `communication_mode: fair_1bit` (default fair HST benchmark)
 
 Example:
@@ -53,10 +53,10 @@ This run automatically:
 
 ## Bash orchestration for multiple runs
 
-Run 10 replication seeds (single setting, e.g. `n=50`):
+Run 3 replication seeds (single setting, e.g. `n=50`):
 
 ```bash
-for seed in $(seq 0 9); do
+for seed in $(seq 0 2); do
   python scripts/train.py --config configs/default.yaml --seed "$seed" --num-nodes 50
 done
 ```
@@ -65,7 +65,7 @@ Or use the helper script:
 
 ```bash
 bash scripts/run_replication.sh configs/default.yaml 50
-# optional third arg: number of seeds (default 10 -> seeds 0..9)
+# optional third arg: number of seeds (default 3 -> seeds 0..2)
 ```
 
 Run multiple node sizes:
@@ -92,7 +92,7 @@ bash scripts/run_experiment_fair.sh
 bash scripts/run_experiment_vector.sh
 ```
 
-Each script runs the full matrix (`n={10,50,100}`, `q={0.6,0.8}`, **10 seeds** `0..9` from config),
+Each script runs the full matrix (`n={10,50,100}`, `q={0.6,0.8}`, **3 seeds** `0..2`, `T=100` from config),
 writes a grid summary JSON, and builds per-run + seed-aggregated CSV tables.
 
 | Script | Mode | Artifacts | Summary |
@@ -110,8 +110,8 @@ bash scripts/run_experiment_fair.sh --seeds 0,1,2
 
 `python scripts/run_grid.py --config configs/default.yaml`
 
-By default this runs **10 seeds** (`0..9`) from `num_seeds: 10` in `configs/default.yaml`.
-Override with `--seeds 0,1,2` or set an explicit list in YAML (`seeds: [0, 1, 2, ...]`).
+By default this runs **3 seeds** (`0..2`) from `num_seeds: 3` in `configs/default.yaml`.
+Override with `--seeds 0,1,2,3` or set an explicit list in YAML (`seeds: [0, 1, 2, ...]`).
 
 This writes:
 - per-run metrics under `<artifacts_dir>/grid_runs/...`
@@ -136,9 +136,17 @@ Fairness protocol for HST comparison:
 ## Artifacts
 
 - Graph cache: `artifacts/graphs`
-- Metrics: `artifacts/training_metrics/seed_<seed>/metrics.json`
+- Metrics: `artifacts/training_metrics/seed_<seed>/metrics.json` (compact by default)
+- Plots: `artifacts/.../seed_<seed>/plots/<condition>.png` (empirical `ε(t)`, GAT fit, HST bound curve)
 
-Each metrics file contains condition-level outputs (`epsilon(t)`, beta fit, final train loss).
+Each metrics file stores beta fit, HST comparison, and `train_loss_final`. Full
+`train_loss_history` / `epsilon_series` arrays are omitted unless enabled in config.
+
+Config flags (`configs/default.yaml`):
+
+- `save_train_loss_history: false`
+- `save_epsilon_series: false`
+- `save_learning_rate_plots: true`
 
 ### Summarize all metrics into one table
 

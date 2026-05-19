@@ -1,5 +1,5 @@
 seed: 0
-num_seeds: 10
+num_seeds: 3
 num_nodes: 10
 
 wandb_project: game-theory-project
@@ -10,7 +10,7 @@ artifacts_dir: artifacts/training_metrics
 
 train_episodes: 5000
 test_episodes: 1000
-max_horizon: 50
+max_horizon: 100
 signal_quality: 0.8
 
 learning_rate: 0.001
@@ -20,3 +20,7 @@ communication_mode: fair_1bit
 communication_dim:
 
 disable_beta_fit: false
+
+save_train_loss_history: false
+save_epsilon_series: false
+save_learning_rate_plots: true

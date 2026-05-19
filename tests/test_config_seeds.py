@@ -16,11 +16,11 @@ def test_resolve_replication_seeds_from_yaml_list() -> None:
 
 
 def test_resolve_replication_seeds_from_num_seeds() -> None:
-    assert resolve_replication_seeds(run_config={"num_seeds": 10}) == list(range(10))
+    assert resolve_replication_seeds(run_config={"num_seeds": 3}) == list(range(3))
 
 
 def test_resolve_replication_seeds_default_count() -> None:
-    assert resolve_replication_seeds(run_config={}) == list(range(10))
+    assert resolve_replication_seeds(run_config={}) == list(range(3))
 
 
 def test_resolve_replication_seeds_rejects_empty_cli() -> None:

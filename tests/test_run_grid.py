@@ -68,6 +68,9 @@ def test_run_grid_experiments_aggregates_and_normalizes_conditions(
         communication_dim=None,
         learning_rate=0.001,
         disable_beta_fit=False,
+        save_train_loss_history=False,
+        save_epsilon_series=False,
+        save_learning_rate_plots=False,
     )
 
     assert summary["num_runs"] == 2

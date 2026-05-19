@@ -142,6 +142,9 @@ def run_grid_experiments(
     communication_dim: int | None,
     learning_rate: float,
     disable_beta_fit: bool,
+    save_train_loss_history: bool,
+    save_epsilon_series: bool,
+    save_learning_rate_plots: bool,
 ) -> dict[str, Any]:
     generator = GraphGenerator()
     graph_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -174,6 +177,9 @@ def run_grid_experiments(
                     communication_dim=communication_dim,
                     learning_rate=learning_rate,
                     disable_beta_fit=disable_beta_fit,
+                    save_train_loss_history=save_train_loss_history,
+                    save_epsilon_series=save_epsilon_series,
+                    save_learning_rate_plots=save_learning_rate_plots,
                 )
                 run_summaries.append(
                     {
@@ -250,7 +256,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Comma-separated seeds, e.g. '0,1,2'. "
-            "If omitted, uses config num_seeds (default 10 -> seeds 0..9)."
+            "If omitted, uses config num_seeds (default 3 -> seeds 0..2)."
         ),
     )
     parser.add_argument(
@@ -360,6 +366,9 @@ def main() -> None:
         ),
         learning_rate=float(run_config["learning_rate"]),
         disable_beta_fit=bool(run_config["disable_beta_fit"]),
+        save_train_loss_history=bool(run_config["save_train_loss_history"]),
+        save_epsilon_series=bool(run_config["save_epsilon_series"]),
+        save_learning_rate_plots=bool(run_config["save_learning_rate_plots"]),
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

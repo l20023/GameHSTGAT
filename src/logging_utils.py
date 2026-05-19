@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 
@@ -55,6 +56,16 @@ def log_condition_metrics(
     epsilon_series = metrics.get("epsilon_series", [])
     for t, epsilon_t in enumerate(epsilon_series, start=1):
         payload[f"{condition_key}/epsilon_t/{t}"] = float(epsilon_t)
+
+    plot_path = metrics.get("learning_rate_plot")
+    if isinstance(plot_path, str) and Path(plot_path).is_file():
+        try:
+            import wandb  # type: ignore
+
+            payload[f"{condition_key}/learning_rate_plot"] = wandb.Image(plot_path)
+        except Exception:
+            pass
+
     run.log(payload)
 
 

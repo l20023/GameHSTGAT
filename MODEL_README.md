@@ -159,7 +159,7 @@ Config is merged in this order:
 3. CLI overrides
 
 Current important defaults:
-- `max_horizon: 50`
+- `max_horizon: 100`
 - `wandb_project: game-theory-project`
 - `wandb_entity: GameHSTGAT`
 - `communication_mode: fair_1bit`

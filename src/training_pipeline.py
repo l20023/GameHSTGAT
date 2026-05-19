@@ -137,10 +137,19 @@ def compute_epsilon_series(
     return epsilon.tolist()
 
 
+def exponential_decay_values(
+    t_values: np.ndarray, *, alpha: float, beta: float, epsilon_inf: float
+) -> np.ndarray:
+    """Evaluate epsilon(t) = alpha * exp(-beta * t) + epsilon_inf."""
+    return alpha * np.exp(-beta * t_values) + epsilon_inf
+
+
 def _exponential_decay(
     t_values: np.ndarray, alpha: float, beta: float, epsilon_inf: float
 ) -> np.ndarray:
-    return alpha * np.exp(-beta * t_values) + epsilon_inf
+    return exponential_decay_values(
+        t_values, alpha=alpha, beta=beta, epsilon_inf=epsilon_inf
+    )
 
 
 def _fit_quality_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float]:
@@ -367,23 +376,32 @@ def run_condition_experiment(
     )
 
 
-def condition_result_to_dict(result: ConditionRunResult) -> dict[str, Any]:
+def condition_result_to_dict(
+    result: ConditionRunResult,
+    *,
+    save_train_loss_history: bool = False,
+    save_epsilon_series: bool = False,
+) -> dict[str, Any]:
     """Convert dataclass result to JSON-serializable dictionary."""
-    return {
-        "train_loss_history": result.train_loss_history,
+    payload: dict[str, Any] = {
         "train_loss_final": result.train_loss_history[-1] if result.train_loss_history else None,
-        "epsilon_series": result.epsilon_series,
         "beta_fit": result.beta_fit,
         "beta_hst_max": result.beta_hst_max,
         "beta_gap": result.beta_gap,
         "exceeds_hst_bound": result.exceeds_hst_bound,
     }
+    if save_train_loss_history:
+        payload["train_loss_history"] = result.train_loss_history
+    if save_epsilon_series:
+        payload["epsilon_series"] = result.epsilon_series
+    return payload
 
 
 __all__ = [
     "ConditionRunResult",
     "condition_result_to_dict",
     "compute_epsilon_series",
+    "exponential_decay_values",
     "fit_beta_from_epsilon",
     "run_condition_experiment",
     "train_condition_model",
