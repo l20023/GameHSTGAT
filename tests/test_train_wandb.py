@@ -103,6 +103,8 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
         signal_quality=0.8,
         hidden_dim=8,
         num_heads=2,
+        communication_mode="fair_1bit",
+        communication_dim=None,
         learning_rate=0.001,
         disable_beta_fit=False,
     )
@@ -117,6 +119,8 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
     assert isinstance(init_kwargs, dict)
     assert init_kwargs["project"] == "unit-test-project"
     assert init_kwargs["config"]["ws_probs"] == train_script.PROPOSAL_WS_PROBS
+    assert init_kwargs["config"]["communication_mode"] == "fair_1bit"
+    assert init_kwargs["config"]["communication_dim"] is None
 
     metrics_path = tmp_path / "metrics" / "seed_0" / "metrics.json"
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))

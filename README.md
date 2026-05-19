@@ -20,6 +20,7 @@ The training script runs one configuration per invocation.
   - `wandb_project: game-theory-project`
   - `wandb_entity: GameHSTGAT`
   - `max_horizon: 50`
+  - `communication_mode: fair_1bit` (default fair HST benchmark)
 
 Example:
 
@@ -41,6 +42,8 @@ This run automatically:
 - `--signal-quality`
 - `--hidden-dim`
 - `--num-heads`
+- `--communication-mode` (`fair_1bit` or `vector`)
+- `--communication-dim` (used for `vector` mode)
 - `--learning-rate`
 - `--graph-cache-dir`
 - `--artifacts-dir`
@@ -86,6 +89,11 @@ HST reference bound used in code:
 - `beta_HST_max(q) = 2 * log(q/(1-q))` for binary symmetric signals
 - based on HST bound `M = 2 * sup |log-likelihood|` (Eq. (1), Theorem 1)
 - source: [https://arxiv.org/pdf/2112.14265](https://arxiv.org/pdf/2112.14265)
+
+Fairness protocol for HST comparison:
+- default mode `communication_mode=fair_1bit` enforces a strict 1-bit visible channel between agents
+- this uses an STE bridge so forward communication stays binary while training remains differentiable
+- `communication_mode=vector` is kept for ablations and is not the strict fair benchmark
 
 ## Artifacts
 

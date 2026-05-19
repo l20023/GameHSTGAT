@@ -38,6 +38,8 @@ DEFAULT_RUN_CONFIG: dict[str, Any] = {
     "learning_rate": 0.001,
     "hidden_dim": 32,
     "num_heads": 2,
+    "communication_mode": "fair_1bit",
+    "communication_dim": None,
     "disable_beta_fit": False,
 }
 
@@ -66,6 +68,8 @@ def run_single_seed(
     signal_quality: float,
     hidden_dim: int,
     num_heads: int,
+    communication_mode: str,
+    communication_dim: int | None,
     learning_rate: float,
     disable_beta_fit: bool,
 ) -> dict:
@@ -87,6 +91,8 @@ def run_single_seed(
         "signal_quality": signal_quality,
         "hidden_dim": hidden_dim,
         "num_heads": num_heads,
+        "communication_mode": communication_mode,
+        "communication_dim": communication_dim,
         "learning_rate": learning_rate,
         "disable_beta_fit": disable_beta_fit,
     }
@@ -111,6 +117,8 @@ def run_single_seed(
                     signal_quality=signal_quality,
                     hidden_dim=hidden_dim,
                     num_heads=num_heads,
+                    communication_mode=communication_mode,
+                    communication_dim=communication_dim,
                     learning_rate=learning_rate,
                     seed=seed,
                     disable_beta_fit=disable_beta_fit,
@@ -246,6 +254,19 @@ def parse_args() -> argparse.Namespace:
         help="Number of GAT attention heads.",
     )
     parser.add_argument(
+        "--communication-mode",
+        type=str,
+        choices=["fair_1bit", "vector"],
+        default=None,
+        help="Communication channel mode: fair 1-bit bottleneck or vector ablation.",
+    )
+    parser.add_argument(
+        "--communication-dim",
+        type=int,
+        default=None,
+        help="Visible communication dimension (used in vector mode).",
+    )
+    parser.add_argument(
         "--artifacts-dir",
         type=Path,
         default=None,
@@ -276,6 +297,8 @@ def resolve_run_config(args: argparse.Namespace) -> dict[str, Any]:
         "learning_rate": args.learning_rate,
         "hidden_dim": args.hidden_dim,
         "num_heads": args.num_heads,
+        "communication_mode": args.communication_mode,
+        "communication_dim": args.communication_dim,
         "disable_beta_fit": args.disable_beta_fit if args.disable_beta_fit else None,
     }
     config = merge_flat_config(
@@ -309,6 +332,10 @@ def main() -> None:
         signal_quality=float(run_config["signal_quality"]),
         hidden_dim=int(run_config["hidden_dim"]),
         num_heads=int(run_config["num_heads"]),
+        communication_mode=str(run_config["communication_mode"]),
+        communication_dim=(
+            None if run_config["communication_dim"] is None else int(run_config["communication_dim"])
+        ),
         learning_rate=float(run_config["learning_rate"]),
         disable_beta_fit=bool(run_config["disable_beta_fit"]),
     )

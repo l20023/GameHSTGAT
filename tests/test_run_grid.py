@@ -64,6 +64,8 @@ def test_run_grid_experiments_aggregates_and_normalizes_conditions(
         max_horizon=5,
         hidden_dim=8,
         num_heads=2,
+        communication_mode="fair_1bit",
+        communication_dim=None,
         learning_rate=0.001,
         disable_beta_fit=False,
     )

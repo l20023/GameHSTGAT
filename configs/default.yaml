@@ -15,5 +15,7 @@ signal_quality: 0.8
 learning_rate: 0.001
 hidden_dim: 32
 num_heads: 2
+communication_mode: fair_1bit
+communication_dim:
 
 disable_beta_fit: false

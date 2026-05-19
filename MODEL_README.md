@@ -52,20 +52,26 @@ Design choice:
 ## 4) Model architecture
 
 The model in `src/models/recurrent_gat_agent.py` combines:
-- `GATv2Conv` over the prior hidden beliefs
+- `GATv2Conv` over the visible communication channel
 - `GRUCell` for temporal state update
 - per-step MLP head for binary logits
 
+Communication modes:
+- `fair_1bit` (default): only previous binary actions are visible to neighbors
+- `vector`: optional ablation mode with higher-dimensional visible messages
+
 Per time step:
-1. message passing on previous hidden state
+1. message passing on previous visible neighbor messages
 2. concatenate current private signal
 3. GRU update of latent belief
 4. predict current state logits
+5. construct next-round visible message (STE-binarized action in fair mode)
 
 Design choices:
 - **Recurrent state (`GRUCell`)**: keeps temporal memory instead of reprocessing full sequence each step
 - **Attention message passing (`GATv2Conv`)**: allows learned neighbor weighting
 - **Per-step predictions**: enables anytime evaluation, not only final horizon output
+- **Fair 1-bit default channel**: matches HST communication bottleneck constraints
 
 ## 5) Training objective
 
@@ -156,6 +162,7 @@ Current important defaults:
 - `max_horizon: 50`
 - `wandb_project: game-theory-project`
 - `wandb_entity: GameHSTGAT`
+- `communication_mode: fair_1bit`
 
 Design choice:
 - flat config schema keeps single-run and grid-run scripts simple and easy to override from shell experiments.

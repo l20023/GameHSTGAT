@@ -13,6 +13,10 @@ from .hst_bound import compute_beta_hst_max
 from .models import RecurrentGATAgent, SharedSequentialLoss
 from .signal_generator import PrivateSignalGenerator
 
+EPISODE_SEED_STRIDE = 100_000_000
+TRAIN_EPISODE_OFFSET = 0
+TEST_EPISODE_OFFSET = 10_000_000
+
 
 @dataclass
 class ConditionRunResult:
@@ -42,7 +46,17 @@ def _episode_to_model_inputs(
 
 
 def _episode_seed(base_seed: int, episode_idx: int, offset: int) -> int:
-    return base_seed * 1_000_000 + offset + episode_idx
+    if episode_idx < 0:
+        raise ValueError("episode_idx must be >= 0.")
+    if offset < 0 or offset >= EPISODE_SEED_STRIDE:
+        raise ValueError(
+            f"offset must be in [0, {EPISODE_SEED_STRIDE - 1}] to avoid split collisions."
+        )
+    if episode_idx + offset >= EPISODE_SEED_STRIDE:
+        raise ValueError(
+            "episode_idx + offset exceeds split stride; choose smaller episode count or different split design."
+        )
+    return base_seed * EPISODE_SEED_STRIDE + offset + episode_idx
 
 
 def train_condition_model(
@@ -53,6 +67,8 @@ def train_condition_model(
     signal_quality: float,
     hidden_dim: int,
     num_heads: int,
+    communication_mode: str = "fair_1bit",
+    communication_dim: int | None = None,
     learning_rate: float,
     seed: int,
 ) -> tuple[RecurrentGATAgent, list[float]]:
@@ -63,6 +79,8 @@ def train_condition_model(
         num_features_signal=1,
         hidden_dim=hidden_dim,
         num_heads=num_heads,
+        communication_mode=communication_mode,
+        communication_dim=communication_dim,
     )
     criterion = SharedSequentialLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -73,7 +91,7 @@ def train_condition_model(
         episode = signal_generator.generate_episode(
             num_nodes=num_nodes,
             max_horizon=max_horizon,
-            seed=_episode_seed(seed, episode_idx, offset=0),
+            seed=_episode_seed(seed, episode_idx, offset=TRAIN_EPISODE_OFFSET),
         )
         x_sequences, targets = _episode_to_model_inputs(episode, num_nodes=num_nodes)
         optimizer.zero_grad()
@@ -107,7 +125,7 @@ def compute_epsilon_series(
             episode = signal_generator.generate_episode(
                 num_nodes=num_nodes,
                 max_horizon=max_horizon,
-                seed=_episode_seed(seed, episode_idx, offset=100_000),
+                seed=_episode_seed(seed, episode_idx, offset=TEST_EPISODE_OFFSET),
             )
             x_sequences, targets = _episode_to_model_inputs(episode, num_nodes=num_nodes)
             all_logits = model(x_sequences, graph_data.edge_index, max_horizon=max_horizon)
@@ -119,25 +137,110 @@ def compute_epsilon_series(
     return epsilon.tolist()
 
 
+def _exponential_decay(
+    t_values: np.ndarray, alpha: float, beta: float, epsilon_inf: float
+) -> np.ndarray:
+    return alpha * np.exp(-beta * t_values) + epsilon_inf
+
+
+def _fit_quality_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float]:
+    residuals = y_true - y_pred
+    rmse = float(np.sqrt(np.mean(np.square(residuals))))
+    ss_res = float(np.sum(np.square(residuals)))
+    ss_tot = float(np.sum(np.square(y_true - float(np.mean(y_true)))))
+    if ss_tot <= 1e-12:
+        r2 = float("nan")
+    else:
+        r2 = 1.0 - (ss_res / ss_tot)
+    return rmse, r2
+
+
+def _finalize_fit_result(
+    *,
+    method: str,
+    alpha: float,
+    beta: float,
+    epsilon_inf: float,
+    y_true: np.ndarray,
+    t_values: np.ndarray,
+) -> dict[str, float | bool | str]:
+    y_pred = _exponential_decay(t_values, alpha, beta, epsilon_inf)
+    rmse, r2 = _fit_quality_metrics(y_true, y_pred)
+
+    fit_success = True
+    failure_reason = ""
+    if not np.isfinite(alpha) or not np.isfinite(beta) or not np.isfinite(epsilon_inf):
+        fit_success = False
+        failure_reason = "non_finite_params"
+    elif beta < 0.0:
+        fit_success = False
+        failure_reason = "negative_beta"
+    elif epsilon_inf < 0.0 or epsilon_inf > 1.0:
+        fit_success = False
+        failure_reason = "epsilon_inf_out_of_range"
+    elif len(y_true) >= 5 and np.isfinite(r2) and r2 < -0.1:
+        fit_success = False
+        failure_reason = "poor_fit_r2"
+
+    return {
+        "alpha": float(alpha),
+        "beta": float(beta),
+        "epsilon_inf": float(epsilon_inf),
+        "fit_success": fit_success,
+        "method": method,
+        "rmse": rmse,
+        "r2": r2,
+        "failure_reason": failure_reason if not fit_success else "",
+    }
+
+
 def _fallback_beta_fit(epsilon_series: list[float]) -> dict[str, float | bool | str]:
     """Fit exponential decay using a log-linear fallback without scipy."""
     y = np.asarray(epsilon_series, dtype=float)
     t = np.arange(1, len(y) + 1, dtype=float)
-    tail_len = min(5, len(y))
-    epsilon_inf = float(np.mean(y[-tail_len:]))
-    shifted = y - epsilon_inf
     min_positive = max(float(np.max(y)) * 1e-6, 1e-9)
-    shifted = np.maximum(shifted, min_positive)
-    slope, intercept = np.polyfit(t, np.log(shifted), 1)
-    beta = max(0.0, float(-slope))
-    alpha = float(np.exp(intercept))
-    return {
-        "alpha": alpha,
-        "beta": beta,
-        "epsilon_inf": epsilon_inf,
-        "fit_success": True,
-        "method": "log_linear_fallback",
-    }
+
+    # Search epsilon_inf candidates to stabilize the log-linear fallback.
+    y_min = float(np.min(y))
+    epsilon_upper = max(y_min - min_positive, min_positive)
+    candidates = np.linspace(0.0, epsilon_upper, num=80, dtype=float)
+    if not np.any(np.isclose(candidates, epsilon_upper)):
+        candidates = np.append(candidates, epsilon_upper)
+
+    best_result: tuple[float, float, float, float] | None = None
+    for epsilon_inf in candidates:
+        shifted = y - float(epsilon_inf)
+        if np.any(shifted <= 0.0):
+            continue
+        slope, intercept = np.polyfit(t, np.log(shifted), 1)
+        beta = max(0.0, float(-slope))
+        alpha = float(np.exp(intercept))
+        y_pred = _exponential_decay(t, alpha, beta, float(epsilon_inf))
+        rmse, _ = _fit_quality_metrics(y, y_pred)
+        if best_result is None or rmse < best_result[0]:
+            best_result = (rmse, alpha, beta, float(epsilon_inf))
+
+    if best_result is None:
+        return {
+            "alpha": float("nan"),
+            "beta": float("nan"),
+            "epsilon_inf": float("nan"),
+            "fit_success": False,
+            "method": "log_linear_fallback",
+            "rmse": float("nan"),
+            "r2": float("nan"),
+            "failure_reason": "fallback_failed",
+        }
+
+    _, alpha, beta, epsilon_inf = best_result
+    return _finalize_fit_result(
+        method="log_linear_fallback",
+        alpha=alpha,
+        beta=beta,
+        epsilon_inf=epsilon_inf,
+        y_true=y,
+        t_values=t,
+    )
 
 
 def fit_beta_from_epsilon(epsilon_series: list[float]) -> dict[str, float | bool | str]:
@@ -149,6 +252,9 @@ def fit_beta_from_epsilon(epsilon_series: list[float]) -> dict[str, float | bool
             "epsilon_inf": float("nan"),
             "fit_success": False,
             "method": "insufficient_points",
+            "rmse": float("nan"),
+            "r2": float("nan"),
+            "failure_reason": "insufficient_points",
         }
 
     y = np.asarray(epsilon_series, dtype=float)
@@ -159,36 +265,35 @@ def fit_beta_from_epsilon(epsilon_series: list[float]) -> dict[str, float | bool
             "epsilon_inf": float("nan"),
             "fit_success": False,
             "method": "non_finite_input",
+            "rmse": float("nan"),
+            "r2": float("nan"),
+            "failure_reason": "non_finite_input",
         }
 
     t = np.arange(1, len(y) + 1, dtype=float)
     try:
         from scipy.optimize import curve_fit  # type: ignore
 
-        def exponential_decay(
-            t_values: np.ndarray, alpha: float, beta: float, epsilon_inf: float
-        ) -> np.ndarray:
-            return alpha * np.exp(-beta * t_values) + epsilon_inf
-
         epsilon_inf_guess = float(np.mean(y[-min(5, len(y)) :]))
         alpha_guess = max(float(y[0] - epsilon_inf_guess), 1e-6)
         initial_guess = (alpha_guess, 0.1, max(0.0, epsilon_inf_guess))
         bounds = ((0.0, 0.0, 0.0), (1.0, 10.0, 1.0))
         params, _ = curve_fit(
-            exponential_decay,
+            _exponential_decay,
             t,
             y,
             p0=initial_guess,
             bounds=bounds,
             maxfev=10_000,
         )
-        return {
-            "alpha": float(params[0]),
-            "beta": float(params[1]),
-            "epsilon_inf": float(params[2]),
-            "fit_success": True,
-            "method": "scipy_curve_fit",
-        }
+        return _finalize_fit_result(
+            method="scipy_curve_fit",
+            alpha=float(params[0]),
+            beta=float(params[1]),
+            epsilon_inf=float(params[2]),
+            y_true=y,
+            t_values=t,
+        )
     except Exception:
         return _fallback_beta_fit(epsilon_series)
 
@@ -202,6 +307,8 @@ def run_condition_experiment(
     signal_quality: float,
     hidden_dim: int,
     num_heads: int,
+    communication_mode: str = "fair_1bit",
+    communication_dim: int | None = None,
     learning_rate: float,
     seed: int,
     disable_beta_fit: bool = False,
@@ -214,6 +321,8 @@ def run_condition_experiment(
         signal_quality=signal_quality,
         hidden_dim=hidden_dim,
         num_heads=num_heads,
+        communication_mode=communication_mode,
+        communication_dim=communication_dim,
         learning_rate=learning_rate,
         seed=seed,
     )
@@ -232,6 +341,9 @@ def run_condition_experiment(
             "epsilon_inf": float("nan"),
             "fit_success": False,
             "method": "disabled",
+            "rmse": float("nan"),
+            "r2": float("nan"),
+            "failure_reason": "disabled",
         }
     else:
         beta_fit = fit_beta_from_epsilon(epsilon_series)

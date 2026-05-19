@@ -138,6 +138,8 @@ def run_grid_experiments(
     max_horizon: int,
     hidden_dim: int,
     num_heads: int,
+    communication_mode: str,
+    communication_dim: int | None,
     learning_rate: float,
     disable_beta_fit: bool,
 ) -> dict[str, Any]:
@@ -168,6 +170,8 @@ def run_grid_experiments(
                     signal_quality=signal_quality,
                     hidden_dim=hidden_dim,
                     num_heads=num_heads,
+                    communication_mode=communication_mode,
+                    communication_dim=communication_dim,
                     learning_rate=learning_rate,
                     disable_beta_fit=disable_beta_fit,
                 )
@@ -213,6 +217,8 @@ def run_grid_experiments(
             "max_horizon": max_horizon,
             "hidden_dim": hidden_dim,
             "num_heads": num_heads,
+            "communication_mode": communication_mode,
+            "communication_dim": communication_dim,
             "learning_rate": learning_rate,
             "disable_beta_fit": disable_beta_fit,
             "wandb_project": wandb_project,
@@ -281,6 +287,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-horizon", type=int, default=None)
     parser.add_argument("--hidden-dim", type=int, default=None)
     parser.add_argument("--num-heads", type=int, default=None)
+    parser.add_argument(
+        "--communication-mode",
+        type=str,
+        choices=["fair_1bit", "vector"],
+        default=None,
+    )
+    parser.add_argument("--communication-dim", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
     parser.add_argument("--disable-beta-fit", action="store_true")
     return parser.parse_args()
@@ -298,6 +311,8 @@ def resolve_run_config(args: argparse.Namespace) -> dict[str, Any]:
         "max_horizon": args.max_horizon,
         "hidden_dim": args.hidden_dim,
         "num_heads": args.num_heads,
+        "communication_mode": args.communication_mode,
+        "communication_dim": args.communication_dim,
         "learning_rate": args.learning_rate,
         "disable_beta_fit": args.disable_beta_fit if args.disable_beta_fit else None,
     }
@@ -335,6 +350,10 @@ def main() -> None:
         max_horizon=int(run_config["max_horizon"]),
         hidden_dim=int(run_config["hidden_dim"]),
         num_heads=int(run_config["num_heads"]),
+        communication_mode=str(run_config["communication_mode"]),
+        communication_dim=(
+            None if run_config["communication_dim"] is None else int(run_config["communication_dim"])
+        ),
         learning_rate=float(run_config["learning_rate"]),
         disable_beta_fit=bool(run_config["disable_beta_fit"]),
     )

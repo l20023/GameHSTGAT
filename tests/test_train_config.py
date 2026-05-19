@@ -14,6 +14,8 @@ def test_resolve_run_config_yaml_and_cli_override(tmp_path) -> None:
                 "wandb_project: yaml-project",
                 "wandb_entity: yaml-entity",
                 "train_episodes: 123",
+                "communication_mode: vector",
+                "communication_dim: 4",
             ]
         ),
         encoding="utf-8",
@@ -34,6 +36,8 @@ def test_resolve_run_config_yaml_and_cli_override(tmp_path) -> None:
         learning_rate=None,
         hidden_dim=None,
         num_heads=None,
+        communication_mode=None,
+        communication_dim=None,
         disable_beta_fit=False,
     )
     resolved = train_script.resolve_run_config(args)
@@ -41,6 +45,8 @@ def test_resolve_run_config_yaml_and_cli_override(tmp_path) -> None:
     assert resolved["num_nodes"] == 50  # YAML overrides defaults
     assert resolved["train_episodes"] == 999  # CLI overrides YAML
     assert resolved["wandb_entity"] == "yaml-entity"
+    assert resolved["communication_mode"] == "vector"
+    assert resolved["communication_dim"] == 4
 
 
 def test_parse_args_accepts_single_seed_and_num_nodes(monkeypatch) -> None:

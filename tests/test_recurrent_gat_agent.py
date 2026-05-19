@@ -72,6 +72,32 @@ def test_model_invalid_constructor_params_raise(hidden_dim: int, num_heads: int)
         RecurrentGATAgent(num_features_signal=1, hidden_dim=hidden_dim, num_heads=num_heads)
 
 
+def test_model_invalid_communication_params_raise() -> None:
+    with pytest.raises(ValueError):
+        RecurrentGATAgent(
+            num_features_signal=1,
+            hidden_dim=32,
+            num_heads=2,
+            communication_mode="invalid",
+        )
+    with pytest.raises(ValueError):
+        RecurrentGATAgent(
+            num_features_signal=1,
+            hidden_dim=32,
+            num_heads=2,
+            communication_mode="fair_1bit",
+            communication_dim=2,
+        )
+    with pytest.raises(ValueError):
+        RecurrentGATAgent(
+            num_features_signal=1,
+            hidden_dim=32,
+            num_heads=2,
+            communication_mode="vector",
+            communication_dim=0,
+        )
+
+
 def test_forward_rejects_invalid_horizon() -> None:
     num_nodes = 5
     edge_index = _make_complete_edge_index(num_nodes)
@@ -89,3 +115,44 @@ def test_loss_rejects_incompatible_targets_shape() -> None:
 
     with pytest.raises(ValueError):
         criterion(logits, bad_targets)
+
+
+def test_forward_does_not_use_future_signals_for_earlier_predictions() -> None:
+    torch.manual_seed(7)
+    num_nodes = 6
+    horizon = 5
+    split_t = 2  # rounds 0..2 must be invariant
+    edge_index = _make_complete_edge_index(num_nodes)
+    x_sequences = torch.rand((num_nodes, horizon, 1), dtype=torch.float32)
+
+    model = RecurrentGATAgent(num_features_signal=1, hidden_dim=32, num_heads=2)
+    model.eval()
+    with torch.no_grad():
+        logits_reference = model(x_sequences, edge_index, max_horizon=horizon)
+
+        x_modified = x_sequences.clone()
+        x_modified[:, split_t + 1 :, :] = 1.0 - x_modified[:, split_t + 1 :, :]
+        logits_modified = model(x_modified, edge_index, max_horizon=horizon)
+
+    assert torch.allclose(
+        logits_reference[: split_t + 1],
+        logits_modified[: split_t + 1],
+        atol=1e-7,
+        rtol=0.0,
+    )
+
+
+def test_forward_vector_mode_returns_expected_shape() -> None:
+    num_nodes = 9
+    horizon = 4
+    edge_index = _make_complete_edge_index(num_nodes)
+    x_sequences = torch.rand((num_nodes, horizon, 1), dtype=torch.float32)
+    model = RecurrentGATAgent(
+        num_features_signal=1,
+        hidden_dim=32,
+        num_heads=2,
+        communication_mode="vector",
+        communication_dim=5,
+    )
+    logits = model(x_sequences, edge_index, max_horizon=horizon)
+    assert logits.shape == (horizon, num_nodes, 2)

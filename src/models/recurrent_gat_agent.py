@@ -18,6 +18,8 @@ class RecurrentGATAgent(nn.Module):
         hidden_dim: int = 32,
         num_heads: int = 2,
         dropout: float = 0.0,
+        communication_mode: str = "fair_1bit",
+        communication_dim: int | None = None,
     ) -> None:
         super().__init__()
         if hidden_dim <= 0:
@@ -28,13 +30,28 @@ class RecurrentGATAgent(nn.Module):
             raise ValueError("hidden_dim must be divisible by num_heads.")
         if num_features_signal <= 0:
             raise ValueError("num_features_signal must be > 0.")
+        if communication_mode not in {"fair_1bit", "vector"}:
+            raise ValueError("communication_mode must be either 'fair_1bit' or 'vector'.")
 
         self.hidden_dim = hidden_dim
         self.num_features_signal = num_features_signal
         self.num_heads = num_heads
+        self.communication_mode = communication_mode
+
+        if communication_mode == "fair_1bit":
+            if communication_dim not in {None, 1}:
+                raise ValueError(
+                    "communication_dim must be None or 1 when communication_mode='fair_1bit'."
+                )
+            self.communication_dim = 1
+        else:
+            resolved_dim = hidden_dim if communication_dim is None else communication_dim
+            if resolved_dim <= 0:
+                raise ValueError("communication_dim must be > 0 for vector communication mode.")
+            self.communication_dim = resolved_dim
 
         self.gat_conv = GATv2Conv(
-            in_channels=hidden_dim,
+            in_channels=self.communication_dim,
             out_channels=hidden_dim // num_heads,
             heads=num_heads,
             concat=True,
@@ -48,6 +65,11 @@ class RecurrentGATAgent(nn.Module):
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
             nn.Linear(hidden_dim // 2, 2),
+        )
+        self.comm_head = (
+            nn.Linear(hidden_dim, self.communication_dim)
+            if self.communication_mode == "vector"
+            else None
         )
 
     def forward(
@@ -96,17 +118,28 @@ class RecurrentGATAgent(nn.Module):
                 )
             hidden_state = initial_hidden_state
 
+        outbound_messages = torch.zeros((num_nodes, self.communication_dim), device=device)
         logits_per_round: list[torch.Tensor] = []
         for t in range(max_horizon):
-            # 1) Message passing on prior beliefs.
-            neighbor_aggregation = F.relu(self.gat_conv(hidden_state, edge_index))
+            # 1) Message passing over the visible communication channel.
+            neighbor_aggregation = F.relu(self.gat_conv(outbound_messages, edge_index))
             # 2) Inject fresh private signal after message passing.
             current_private_signal = x_sequences[:, t, :]
             gru_input = torch.cat([current_private_signal, neighbor_aggregation], dim=-1)
             # 3) Belief-state update.
             hidden_state = self.gru_cell(gru_input, hidden_state)
             # 4) Time-local prediction for shared sequential supervision.
-            logits_per_round.append(self.mlp_head(hidden_state))
+            logits = self.mlp_head(hidden_state)
+            logits_per_round.append(logits)
+            # 5) Build visible message for next round.
+            if self.communication_mode == "fair_1bit":
+                probs_state_one = F.softmax(logits, dim=-1)[:, 1].unsqueeze(-1)
+                hard_action = logits.argmax(dim=-1, keepdim=True).to(probs_state_one.dtype)
+                # Forward pass remains hard-binary while backward uses probabilities.
+                outbound_messages = hard_action + (probs_state_one - probs_state_one.detach())
+            else:
+                assert self.comm_head is not None
+                outbound_messages = torch.tanh(self.comm_head(hidden_state))
 
         return torch.stack(logits_per_round, dim=0)
 
