@@ -33,4 +33,35 @@ def merge_flat_config(
     return merged
 
 
-__all__ = ["load_yaml_config", "merge_flat_config"]
+def resolve_replication_seeds(
+    *,
+    cli_seeds: str | None = None,
+    run_config: dict[str, Any] | None = None,
+    default_count: int = 10,
+) -> list[int]:
+    """
+    Resolve replication seeds for grid runs.
+
+    Precedence: CLI comma-list > explicit YAML ``seeds`` list > ``num_seeds`` in YAML
+    > ``default_count`` seeds ``0 .. default_count-1``.
+    """
+    if cli_seeds is not None and cli_seeds.strip():
+        parsed = [int(item.strip()) for item in cli_seeds.split(",") if item.strip()]
+        if not parsed:
+            raise ValueError("Expected at least one seed in --seeds.")
+        return parsed
+
+    config = run_config or {}
+    yaml_seeds = config.get("seeds")
+    if yaml_seeds is not None:
+        if not isinstance(yaml_seeds, list) or not yaml_seeds:
+            raise ValueError("Config 'seeds' must be a non-empty list of integers.")
+        return [int(seed) for seed in yaml_seeds]
+
+    num_seeds = config.get("num_seeds", default_count)
+    if not isinstance(num_seeds, int) or num_seeds < 1:
+        raise ValueError("Config 'num_seeds' must be an integer >= 1.")
+    return list(range(num_seeds))
+
+
+__all__ = ["load_yaml_config", "merge_flat_config", "resolve_replication_seeds"]

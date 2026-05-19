@@ -1,4 +1,5 @@
 seed: 0
+num_seeds: 10
 num_nodes: 10
 
 wandb_project: game-theory-project

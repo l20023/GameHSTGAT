@@ -53,12 +53,19 @@ This run automatically:
 
 ## Bash orchestration for multiple runs
 
-Run multiple seeds:
+Run 10 replication seeds (single setting, e.g. `n=50`):
 
 ```bash
-for seed in 0 1 2 3 4; do
+for seed in $(seq 0 9); do
   python scripts/train.py --config configs/default.yaml --seed "$seed" --num-nodes 50
 done
+```
+
+Or use the helper script:
+
+```bash
+bash scripts/run_replication.sh configs/default.yaml 50
+# optional third arg: number of seeds (default 10 -> seeds 0..9)
 ```
 
 Run multiple node sizes:
@@ -71,9 +78,40 @@ done
 
 ## Grid runner (proposal matrix)
 
-Run the proposal matrix (`n={10,50,100}`, `q={0.6,0.8}` by default) with one command:
+### One-command experiment scripts (recommended)
 
-`python scripts/run_grid.py --config configs/default.yaml --seeds 0,1,2`
+**Fair HST benchmark** (1-bit communication, separate artifacts):
+
+```bash
+bash scripts/run_experiment_fair.sh
+```
+
+**Vector ablation** (higher-dimensional messages, not the strict fair benchmark):
+
+```bash
+bash scripts/run_experiment_vector.sh
+```
+
+Each script runs the full matrix (`n={10,50,100}`, `q={0.6,0.8}`, **10 seeds** `0..9` from config),
+writes a grid summary JSON, and builds per-run + seed-aggregated CSV tables.
+
+| Script | Mode | Artifacts | Summary |
+|--------|------|-----------|---------|
+| `run_experiment_fair.sh` | `fair_1bit` | `artifacts/training_metrics_fair/` | `artifacts/grid_summary_fair.json` |
+| `run_experiment_vector.sh` | `vector` (dim 32) | `artifacts/training_metrics_vector/` | `artifacts/grid_summary_vector.json` |
+
+Smoke test (3 seeds):
+
+```bash
+bash scripts/run_experiment_fair.sh --seeds 0,1,2
+```
+
+### Low-level grid CLI
+
+`python scripts/run_grid.py --config configs/default.yaml`
+
+By default this runs **10 seeds** (`0..9`) from `num_seeds: 10` in `configs/default.yaml`.
+Override with `--seeds 0,1,2` or set an explicit list in YAML (`seeds: [0, 1, 2, ...]`).
 
 This writes:
 - per-run metrics under `<artifacts_dir>/grid_runs/...`
@@ -101,5 +139,21 @@ Fairness protocol for HST comparison:
 - Metrics: `artifacts/training_metrics/seed_<seed>/metrics.json`
 
 Each metrics file contains condition-level outputs (`epsilon(t)`, beta fit, final train loss).
+
+### Summarize all metrics into one table
+
+```bash
+python scripts/summarize_metrics.py \
+  --root artifacts/training_metrics/grid_runs \
+  --csv artifacts/metrics_summary.csv \
+  --aggregate-csv artifacts/metrics_summary_by_topology.csv \
+  --aggregate-markdown artifacts/metrics_summary_by_topology.md
+```
+
+`--aggregate-csv` reports mean/std of `beta_gat` and `beta_gap` across seeds per topology,
+plus the best run (`beta_gat_best`, `beta_gat_best_seed`, `beta_gap_at_best`).
+
+Scan multiple artifact trees (e.g. grid + smoke) with repeated `--root`. Columns include
+`beta_gat`, `beta_hst_max`, `beta_gap`, `exceeds_hst_bound`, and fit diagnostics per condition.
 
 For a full technical walkthrough of the model and design decisions, see `MODEL_README.md`.

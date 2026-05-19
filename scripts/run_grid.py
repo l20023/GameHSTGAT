@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.train import DEFAULT_CONFIG_PATH, DEFAULT_RUN_CONFIG, run_single_seed
-from src.config import load_yaml_config, merge_flat_config
+from src.config import load_yaml_config, merge_flat_config, resolve_replication_seeds
 from src.graph_generator import GraphGenerator
 from src.reporting import classify_regimes
 
@@ -247,8 +247,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--seeds",
         type=str,
-        default="0",
-        help="Comma-separated seeds, e.g. '0,1,2'.",
+        default=None,
+        help=(
+            "Comma-separated seeds, e.g. '0,1,2'. "
+            "If omitted, uses config num_seeds (default 10 -> seeds 0..9)."
+        ),
     )
     parser.add_argument(
         "--num-nodes-list",
@@ -327,7 +330,8 @@ def main() -> None:
     args = parse_args()
     run_config = resolve_run_config(args)
 
-    seeds = _parse_csv_ints(args.seeds)
+    seeds = resolve_replication_seeds(cli_seeds=args.seeds, run_config=run_config)
+    print(f"Running {len(seeds)} replication seeds: {seeds}")
     num_nodes_list = _parse_csv_ints(args.num_nodes_list)
     signal_quality_list = _parse_csv_floats(args.signal_quality_list)
 
