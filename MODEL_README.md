@@ -90,6 +90,9 @@ From trained models:
 - fit exponential decay `epsilon(t) = alpha * exp(-beta * t) + epsilon_inf`
   - primary method: `scipy.optimize.curve_fit`
   - fallback: log-linear fit when scipy fit fails
+- generate two learning-rate plot variants per condition:
+  - `free_alpha`: baseline visualization where GAT/HST share fitted `(alpha, epsilon_inf)`
+  - `anchored_t1`: HST reference anchored at empirical `epsilon(1)`, then decays with `beta_HST_max`
 
 Bound comparison:
 - `beta_HST_max(q)` follows HST Theorem 1 in `src/hst_bound.py`

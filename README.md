@@ -137,11 +137,15 @@ Fairness protocol for HST comparison:
 
 - Graph cache: `artifacts/graphs`
 - Metrics: `artifacts/training_metrics/seed_<seed>/metrics.json` (compact by default)
-- Plots: `artifacts/.../seed_<seed>/plots/<condition>.png` (empirical `ε(t)`, GAT fit, HST bound curve) and `<condition>__train_loss.png` (training loss per episode)
+- Plots: `artifacts/.../seed_<seed>/plots/<condition>__free_alpha.png`, `<condition>__anchored_t1.png`, and `<condition>__train_loss.png`
 
 Each metrics file stores beta fit, HST comparison, and `train_loss_final`. W&B logs the
 full per-episode training loss curve under `<condition>/train_loss`. Full
 `train_loss_history` / `epsilon_series` arrays in JSON are omitted unless enabled in config.
+
+Learning-rate plots are emitted in two variants:
+- `__free_alpha`: legacy comparison where GAT/HST share fitted `(alpha, epsilon_inf)` and differ only in beta.
+- `__anchored_t1`: HST reference starts at measured `epsilon(1)` and then decays with `beta_HST_max`, which is more interpretable in early rounds.
 
 Config flags (`configs/default.yaml`):
 

@@ -82,6 +82,24 @@ def log_condition_metrics(
         except Exception:
             pass
 
+    free_alpha_plot = metrics.get("learning_rate_plot_free_alpha")
+    if isinstance(free_alpha_plot, str) and Path(free_alpha_plot).is_file():
+        try:
+            import wandb  # type: ignore
+
+            payload[f"{condition_key}/learning_rate_plot_free_alpha"] = wandb.Image(free_alpha_plot)
+        except Exception:
+            pass
+
+    anchored_plot = metrics.get("learning_rate_plot_anchored_t1")
+    if isinstance(anchored_plot, str) and Path(anchored_plot).is_file():
+        try:
+            import wandb  # type: ignore
+
+            payload[f"{condition_key}/learning_rate_plot_anchored_t1"] = wandb.Image(anchored_plot)
+        except Exception:
+            pass
+
     train_loss_plot = metrics.get("train_loss_plot")
     if isinstance(train_loss_plot, str) and Path(train_loss_plot).is_file():
         try:

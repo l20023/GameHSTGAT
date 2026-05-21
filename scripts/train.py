@@ -140,13 +140,14 @@ def run_single_seed(
                     save_epsilon_series=save_epsilon_series,
                 )
                 if save_learning_rate_plots:
-                    plot_path = learning_rate_plot_path(
+                    free_alpha_plot_path = learning_rate_plot_path(
                         artifacts_dir=artifacts_dir,
                         seed=seed,
                         condition_key=key,
+                        plot_variant="free_alpha",
                     )
                     save_learning_rate_plot(
-                        output_path=plot_path,
+                        output_path=free_alpha_plot_path,
                         epsilon_series=result.epsilon_series,
                         beta_fit=result.beta_fit,
                         beta_hst_max=result.beta_hst_max,
@@ -154,8 +155,28 @@ def run_single_seed(
                         signal_quality=signal_quality,
                         beta_gap=result.beta_gap,
                         exceeds_hst_bound=result.exceeds_hst_bound,
+                        plot_variant="free_alpha",
                     )
-                    condition_metrics["learning_rate_plot"] = str(plot_path)
+                    anchored_t1_plot_path = learning_rate_plot_path(
+                        artifacts_dir=artifacts_dir,
+                        seed=seed,
+                        condition_key=key,
+                        plot_variant="anchored_t1",
+                    )
+                    save_learning_rate_plot(
+                        output_path=anchored_t1_plot_path,
+                        epsilon_series=result.epsilon_series,
+                        beta_fit=result.beta_fit,
+                        beta_hst_max=result.beta_hst_max,
+                        condition_key=key,
+                        signal_quality=signal_quality,
+                        beta_gap=result.beta_gap,
+                        exceeds_hst_bound=result.exceeds_hst_bound,
+                        plot_variant="anchored_t1",
+                    )
+                    condition_metrics["learning_rate_plot"] = str(free_alpha_plot_path)
+                    condition_metrics["learning_rate_plot_free_alpha"] = str(free_alpha_plot_path)
+                    condition_metrics["learning_rate_plot_anchored_t1"] = str(anchored_t1_plot_path)
                     train_loss_path = train_loss_plot_path(
                         artifacts_dir=artifacts_dir,
                         seed=seed,

@@ -3,17 +3,26 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
 from .training_pipeline import exponential_decay_values
 
+PlotVariant = Literal["free_alpha", "anchored_t1"]
 
-def learning_rate_plot_path(*, artifacts_dir: Path, seed: int, condition_key: str) -> Path:
+
+def learning_rate_plot_path(
+    *,
+    artifacts_dir: Path,
+    seed: int,
+    condition_key: str,
+    plot_variant: PlotVariant = "free_alpha",
+) -> Path:
     """Return the PNG path for one condition's learning-rate plot."""
     safe_name = condition_key.replace("/", "__")
-    return artifacts_dir / f"seed_{seed}" / "plots" / f"{safe_name}.png"
+    suffix = "free_alpha" if plot_variant == "free_alpha" else "anchored_t1"
+    return artifacts_dir / f"seed_{seed}" / "plots" / f"{safe_name}__{suffix}.png"
 
 
 def save_learning_rate_plot(
@@ -26,12 +35,14 @@ def save_learning_rate_plot(
     signal_quality: float,
     beta_gap: float | None = None,
     exceeds_hst_bound: bool | None = None,
+    plot_variant: PlotVariant = "free_alpha",
 ) -> Path:
     """
     Plot empirical epsilon(t), GAT exponential fit, and HST max-rate reference curve.
 
-    The HST curve uses the same (alpha, epsilon_inf) as the GAT fit but replaces beta
-  with beta_HST_max to visualize the fastest decay permitted by the bound.
+    Variants:
+    - free_alpha: Both GAT and HST curves share fitted (alpha, epsilon_inf), differing only in beta.
+    - anchored_t1: HST reference is anchored at empirical epsilon(1), then decays with beta_HST_max.
     """
     import matplotlib
 
@@ -71,12 +82,21 @@ def save_learning_rate_plot(
         alpha_f = float(alpha)
         beta_gat_f = float(beta_gat)
         epsilon_inf_f = float(epsilon_inf)
+        epsilon_1 = float(empirical[0])
         gat_curve = exponential_decay_values(
             t_values, alpha=alpha_f, beta=beta_gat_f, epsilon_inf=epsilon_inf_f
         )
-        hst_curve = exponential_decay_values(
-            t_values, alpha=alpha_f, beta=float(beta_hst_max), epsilon_inf=epsilon_inf_f
-        )
+        if plot_variant == "anchored_t1":
+            anchored_alpha = epsilon_1 - epsilon_inf_f
+            hst_curve = epsilon_inf_f + anchored_alpha * np.exp(
+                -float(beta_hst_max) * (t_values - 1.0)
+            )
+            hst_label = rf"HST anchored at $\varepsilon(1)$ ($\beta_{{\mathrm{{HST}}}}$={beta_hst_max:.3f})"
+        else:
+            hst_curve = exponential_decay_values(
+                t_values, alpha=alpha_f, beta=float(beta_hst_max), epsilon_inf=epsilon_inf_f
+            )
+            hst_label = rf"HST upper bound ($\beta_{{\mathrm{{HST}}}}$={beta_hst_max:.3f})"
         ax.plot(
             t_values,
             gat_curve,
@@ -91,7 +111,7 @@ def save_learning_rate_plot(
             "--",
             color="#d62728",
             linewidth=2.0,
-            label=rf"HST upper bound ($\beta_{{\mathrm{{HST}}}}$={beta_hst_max:.3f})",
+            label=hst_label,
         )
     else:
         ax.axhline(
@@ -107,6 +127,7 @@ def save_learning_rate_plot(
         title += f"  |  gap={beta_gap:.3f}"
     if isinstance(exceeds_hst_bound, bool):
         title += "  |  exceeds bound" if exceeds_hst_bound else "  |  within bound"
+    title += "  |  anchored HST@t1" if plot_variant == "anchored_t1" else "  |  free alpha"
     ax.set_title(title, fontsize=11)
     ax.set_xlabel("Round t")
     ax.set_ylabel(r"Error rate $\varepsilon(t)$")
@@ -121,4 +142,4 @@ def save_learning_rate_plot(
     return output_path
 
 
-__all__ = ["learning_rate_plot_path", "save_learning_rate_plot"]
+__all__ = ["PlotVariant", "learning_rate_plot_path", "save_learning_rate_plot"]

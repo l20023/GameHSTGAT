@@ -149,3 +149,7 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     assert metrics["seed"] == 0
     assert len(metrics["conditions"]) == 3
+    complete_metrics = metrics["conditions"]["n_10/complete"]
+    assert complete_metrics["learning_rate_plot"].endswith("__free_alpha.png")
+    assert complete_metrics["learning_rate_plot_free_alpha"].endswith("__free_alpha.png")
+    assert complete_metrics["learning_rate_plot_anchored_t1"].endswith("__anchored_t1.png")
