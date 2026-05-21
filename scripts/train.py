@@ -20,6 +20,7 @@ from src.graph_generator import GraphGenerator
 from src.config import load_yaml_config, merge_flat_config
 from src.logging_utils import finish_wandb_run, init_wandb_run, log_condition_metrics
 from src.learning_rate_plots import learning_rate_plot_path, save_learning_rate_plot
+from src.train_loss_plots import save_train_loss_plot, train_loss_plot_path
 from src.training_pipeline import condition_result_to_dict, run_condition_experiment
 
 
@@ -155,12 +156,24 @@ def run_single_seed(
                         exceeds_hst_bound=result.exceeds_hst_bound,
                     )
                     condition_metrics["learning_rate_plot"] = str(plot_path)
+                    train_loss_path = train_loss_plot_path(
+                        artifacts_dir=artifacts_dir,
+                        seed=seed,
+                        condition_key=key,
+                    )
+                    save_train_loss_plot(
+                        output_path=train_loss_path,
+                        train_loss_history=result.train_loss_history,
+                        condition_key=key,
+                    )
+                    condition_metrics["train_loss_plot"] = str(train_loss_path)
                 per_condition_metrics[key] = condition_metrics
                 log_condition_metrics(
                     run=wandb_run,
                     condition_key=key,
                     condition_index=condition_index,
                     metrics=condition_metrics,
+                    train_loss_history=result.train_loss_history,
                 )
                 condition_index += 1
 

@@ -9,11 +9,11 @@ import scripts.train as train_script
 
 class _DummyRun:
     def __init__(self) -> None:
-        self.logs: list[dict] = []
+        self.logs: list[tuple[dict, int | None]] = []
         self.finished = False
 
-    def log(self, payload: dict) -> None:
-        self.logs.append(payload)
+    def log(self, payload: dict, step: int | None = None) -> None:
+        self.logs.append((payload, step))
 
     def finish(self) -> None:
         self.finished = True
@@ -62,23 +62,38 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
     monkeypatch.setattr(
         train_script,
         "run_condition_experiment",
-        lambda **kwargs: {"dummy": kwargs["graph_data"].num_nodes},
+        lambda **kwargs: type(
+            "Result",
+            (),
+            {
+                "train_loss_history": [0.9, 0.123],
+                "epsilon_series": [0.4, 0.3, 0.2],
+                "beta_fit": {
+                    "alpha": 0.5,
+                    "beta": 0.3,
+                    "epsilon_inf": 0.1,
+                    "fit_success": True,
+                    "method": "mock",
+                },
+                "beta_hst_max": 0.81,
+                "beta_gap": -0.51,
+                "exceeds_hst_bound": False,
+            },
+        )(),
     )
     monkeypatch.setattr(
         train_script,
         "condition_result_to_dict",
-        lambda _: {
-            "train_loss_final": 0.123,
-            "epsilon_series": [0.4, 0.3, 0.2],
-            "beta_fit": {
-                "alpha": 0.5,
-                "beta": 0.3,
-                "epsilon_inf": 0.1,
-                "fit_success": True,
-                "method": "mock",
-            },
+        lambda result, **kwargs: {
+            "train_loss_final": result.train_loss_history[-1],
+            "beta_fit": result.beta_fit,
+            "beta_hst_max": result.beta_hst_max,
+            "beta_gap": result.beta_gap,
+            "exceeds_hst_bound": result.exceeds_hst_bound,
         },
     )
+    monkeypatch.setattr(train_script, "save_learning_rate_plot", lambda **kwargs: kwargs["output_path"])
+    monkeypatch.setattr(train_script, "save_train_loss_plot", lambda **kwargs: kwargs["output_path"])
 
     graph_data = {
         10: {
@@ -107,13 +122,21 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
         communication_dim=None,
         learning_rate=0.001,
         disable_beta_fit=False,
+        save_train_loss_history=False,
+        save_epsilon_series=False,
+        save_learning_rate_plots=True,
     )
 
     assert fake_generator.ws_probs_seen == train_script.PROPOSAL_WS_PROBS
     assert summary["num_conditions"] == 3
     assert summary["mean_final_loss"] == 0.123
     assert dummy_run.finished is True
-    assert len(dummy_run.logs) == 3
+    summary_logs = [entry for entry in dummy_run.logs if entry[1] is None]
+    train_loss_logs = [entry for entry in dummy_run.logs if entry[1] is not None]
+    assert len(summary_logs) == 3
+    assert len(train_loss_logs) == 6
+    assert train_loss_logs[0][0]["n_10/complete/train_loss"] == 0.9
+    assert train_loss_logs[1][0]["n_10/complete/train_loss"] == 0.123
 
     init_kwargs = captured["init_kwargs"]
     assert isinstance(init_kwargs, dict)

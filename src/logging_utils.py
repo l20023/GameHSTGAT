@@ -31,14 +31,30 @@ def init_wandb_run(
     )
 
 
+def log_train_loss_history(
+    *,
+    run: Any,
+    condition_key: str,
+    train_loss_history: list[float],
+) -> None:
+    """Log per-episode training loss for one condition to W&B."""
+    if not train_loss_history:
+        return
+
+    metric_key = f"{condition_key}/train_loss"
+    for episode_idx, loss_value in enumerate(train_loss_history):
+        run.log({metric_key: float(loss_value)}, step=episode_idx)
+
+
 def log_condition_metrics(
     *,
     run: Any,
     condition_key: str,
     condition_index: int,
     metrics: dict[str, Any],
+    train_loss_history: list[float] | None = None,
 ) -> None:
-    """Log one condition's summary and epsilon(t) series to W&B."""
+    """Log one condition's summary, training loss curve, and optional series to W&B."""
     beta_fit = metrics.get("beta_fit", {})
     payload: dict[str, Any] = {
         "condition/index": condition_index,
@@ -66,7 +82,28 @@ def log_condition_metrics(
         except Exception:
             pass
 
+    train_loss_plot = metrics.get("train_loss_plot")
+    if isinstance(train_loss_plot, str) and Path(train_loss_plot).is_file():
+        try:
+            import wandb  # type: ignore
+
+            payload[f"{condition_key}/train_loss_plot"] = wandb.Image(train_loss_plot)
+        except Exception:
+            pass
+
     run.log(payload)
+
+    history = train_loss_history
+    if history is None:
+        raw_history = metrics.get("train_loss_history")
+        if isinstance(raw_history, list):
+            history = raw_history
+    if history is not None:
+        log_train_loss_history(
+            run=run,
+            condition_key=condition_key,
+            train_loss_history=history,
+        )
 
 
 def finish_wandb_run(run: Any) -> None:
@@ -74,4 +111,9 @@ def finish_wandb_run(run: Any) -> None:
     run.finish()
 
 
-__all__ = ["finish_wandb_run", "init_wandb_run", "log_condition_metrics"]
+__all__ = [
+    "finish_wandb_run",
+    "init_wandb_run",
+    "log_condition_metrics",
+    "log_train_loss_history",
+]
