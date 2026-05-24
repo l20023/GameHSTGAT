@@ -1,7 +1,7 @@
 from src.reporting import classify_regimes
 
 
-def test_classify_regimes_supports_information_theoretic_limit() -> None:
+def test_classify_regimes_consistent_with_equilibrium_bound() -> None:
     aggregates = {
         "by_setting": {
             "n_10/q_0.6": {
@@ -17,8 +17,8 @@ def test_classify_regimes_supports_information_theoretic_limit() -> None:
         }
     }
     result = classify_regimes(aggregates)
-    assert result["headline_label"] == "supports_information_theoretic_limit"
-    assert result["supports_information_theoretic_limit"] is True
+    assert result["headline_label"] == "consistent_with_equilibrium_bound"
+    assert result["consistent_with_equilibrium_bound"] is True
     assert result["empirical_counter_evidence"] is False
     assert result["boundary_condition_evidence"] is False
 
@@ -35,7 +35,7 @@ def test_classify_regimes_detects_empirical_counter_evidence() -> None:
     }
     result = classify_regimes(aggregates)
     assert result["headline_label"] == "empirical_counter_evidence"
-    assert result["supports_information_theoretic_limit"] is False
+    assert result["consistent_with_equilibrium_bound"] is False
     assert result["empirical_counter_evidence"] is True
 
 

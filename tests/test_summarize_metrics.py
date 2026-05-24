@@ -125,6 +125,50 @@ def test_aggregate_records_computes_mean_and_std_across_seeds() -> None:
     assert row["fit_r2_mean"] == pytest.approx(0.5)
 
 
+def test_aggregate_records_computes_se_ci_and_convergence_rate() -> None:
+    records = [
+        {
+            "seed": 0,
+            "num_nodes": 10,
+            "signal_quality": 0.6,
+            "topology": "complete",
+            "beta_gat": 0.10,
+            "beta_gat_se": 0.02,
+            "beta_gat_ci_lower": 0.06,
+            "beta_gat_ci_upper": 0.14,
+            "beta_hst_max": 0.81,
+            "beta_gap": -0.71,
+            "exceeds_hst_bound": False,
+            "convergence_warning": True,
+            "fit_success": True,
+            "fit_r2": 0.9,
+        },
+        {
+            "seed": 1,
+            "num_nodes": 10,
+            "signal_quality": 0.6,
+            "topology": "complete",
+            "beta_gat": 0.12,
+            "beta_gat_se": 0.04,
+            "beta_gat_ci_lower": 0.04,
+            "beta_gat_ci_upper": 0.20,
+            "beta_hst_max": 0.81,
+            "beta_gap": -0.69,
+            "exceeds_hst_bound": False,
+            "convergence_warning": False,
+            "fit_success": True,
+            "fit_r2": 0.95,
+        },
+    ]
+    aggregated = aggregate_records(records)
+    assert len(aggregated) == 1
+    row = aggregated[0]
+    assert row["beta_gat_se_mean"] == pytest.approx(0.03)
+    assert row["beta_gat_ci_lower_mean"] == pytest.approx(0.05)
+    assert row["beta_gat_ci_upper_mean"] == pytest.approx(0.17)
+    assert row["convergence_warning_rate"] == pytest.approx(0.5)
+
+
 def test_write_csv_creates_table(tmp_path: Path) -> None:
     metrics_path = tmp_path / "seed_2" / "metrics.json"
     metrics_path.parent.mkdir(parents=True)

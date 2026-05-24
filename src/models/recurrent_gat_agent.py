@@ -32,11 +32,14 @@ class RecurrentGATAgent(nn.Module):
             raise ValueError("num_features_signal must be > 0.")
         if communication_mode not in {"fair_1bit", "vector"}:
             raise ValueError("communication_mode must be either 'fair_1bit' or 'vector'.")
+        if not (0.0 <= dropout < 1.0):
+            raise ValueError("dropout must be in [0, 1).")
 
         self.hidden_dim = hidden_dim
         self.num_features_signal = num_features_signal
         self.num_heads = num_heads
         self.communication_mode = communication_mode
+        self.dropout = dropout
 
         if communication_mode == "fair_1bit":
             if communication_dim not in {None, 1}:
@@ -61,8 +64,14 @@ class RecurrentGATAgent(nn.Module):
             input_size=num_features_signal + hidden_dim,
             hidden_size=hidden_dim,
         )
+        self.head_dropout = nn.Dropout(dropout) if dropout > 0.0 else nn.Identity()
+        # MLP head consumes hidden_state concatenated with the current private
+        # signal (residual / skip-connection variant B). This guarantees that
+        # the freshest private signal can directly influence the prediction
+        # without first having to survive a GRU update that may be dominated
+        # by a (potentially wrong) consensus echo.
         self.mlp_head = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.Linear(hidden_dim + num_features_signal, hidden_dim // 2),
             nn.ReLU(),
             nn.Linear(hidden_dim // 2, 2),
         )
@@ -128,8 +137,11 @@ class RecurrentGATAgent(nn.Module):
             gru_input = torch.cat([current_private_signal, neighbor_aggregation], dim=-1)
             # 3) Belief-state update.
             hidden_state = self.gru_cell(gru_input, hidden_state)
-            # 4) Time-local prediction for shared sequential supervision.
-            logits = self.mlp_head(hidden_state)
+            # 4) Time-local prediction with skip from the current private signal.
+            head_input = torch.cat(
+                [self.head_dropout(hidden_state), current_private_signal], dim=-1
+            )
+            logits = self.mlp_head(head_input)
             logits_per_round.append(logits)
             # 5) Build visible message for next round.
             if self.communication_mode == "fair_1bit":

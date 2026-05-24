@@ -6,7 +6,7 @@
 ---
 
 ## Abstract
-Huang, Strack, and Tamuz (2024) proved a fundamental mathematical upper bound (HST bound) on social learning speed: regardless of network size or structure, rational agents cannot learn faster than a rate determined solely by their private signal quality. This proposal investigates whether Graph Attention Networks (GATs) can achieve or exceed this bound when tested empirically. By mapping repeated social interactions to recurrent message passing, we propose the first computational test using an anytime-predictive Generalist GNN to determine whether the HST bound is an information-theoretic limit or an artifact of rational equilibrium constraints.
+Huang, Strack, and Tamuz (2024) proved a fundamental upper bound on equilibrium social-learning speed: regardless of network size or structure, rational agents in equilibrium cannot learn faster than a rate determined solely by their private signal quality. This proposal investigates whether Graph Attention Networks (GATs) can achieve or exceed this benchmark empirically. By mapping repeated social interactions to recurrent message passing, we propose a computational test using an anytime-predictive Generalist GNN to evaluate whether the HST bound is specific to rational-equilibrium behavior or remains tight for trained neural learners.
 
 ---
 
@@ -16,7 +16,7 @@ Social learning examines how individuals in a network aggregate information from
 
 This proposal bridges economic theory and machine learning. Graph Neural Networks (GNNs), specifically Graph Attention Networks (GATs), perform structurally similar message passing but optimize weights via gradient descent rather than strict game-theoretic equilibrium reasoning. 
 
-> **Core Research Question:** Can a single trained, recurrent GAT operating as a generalist agent achieve or exceed the theoretical HST learning bound when evaluated dynamically across standard graph topologies? If so, this demonstrates that the learning barrier is not information-theoretically fundamental, but rather a constraint imposed by rational agency.
+> **Core Research Question:** Can a single trained, recurrent GAT operating as a generalist agent achieve or exceed the theoretical HST equilibrium learning bound when evaluated dynamically across standard graph topologies? If so, this provides empirical evidence that the barrier is tied to rational-equilibrium constraints rather than a universal limit for arbitrary learning procedures.
 
 ---
 
@@ -63,7 +63,7 @@ where private signals are concatenated with aggregated neighbor messages. At eac
 $$\hat{\theta}_{i}^{(t)} = \text{MLP}(h_i^{(t)})$$
 
 ### 3.3 Training Paradigm: Shared Sequential Loss
-To evaluate whether a flexible, single-model setup can adaptively learn over time like human agents, we train a single **Generalist Model**. Instead of optimizing only for the final horizon, the model is trained across all time steps simultaneously. For a maximum horizon $T_{\max} = 50$, we employ a shared sequential cross-entropy loss over all nodes $V$ and all time steps $t$:
+To evaluate whether a flexible, single-model setup can adaptively learn over time like human agents, we train a single **Generalist Model**. Instead of optimizing only for the final horizon, the model is trained across all time steps simultaneously. For a maximum horizon $T_{\max} = 100$ (current implementation), we employ a shared sequential cross-entropy loss over all nodes $V$ and all time steps $t$:
 
 $$\mathcal{L}_{\text{total}} = \frac{1}{T_{\max} \cdot |V|} \sum_{t=1}^{T_{\max}} \sum_{i \in V} \mathcal{L}_{\text{CE}}\left(\hat{\theta}_{i}^{(t)}, \theta\right)$$
 
@@ -86,8 +86,8 @@ The resulting empirical learning rate $\beta_{\text{GAT}}$ will be directly comp
 | :--- | :--- |
 | Network Sizes ($n$) | 10, 50, 100 |
 | Signal Quality ($q$) | 0.60, 0.80 |
-| Max Horizon ($T_{\max}$) | 50 |
-| Training / Test Episodes | 50,000 / 5,000 |
+| Max Horizon ($T_{\max}$) | 100 |
+| Training / Test Episodes | 2,000 / 1,000 |
 | Hidden Dimension | 32 |
 | Attention Heads | 2 |
 | Optimizer | Adam ($\eta = 0.001$) |
@@ -96,11 +96,11 @@ The resulting empirical learning rate $\beta_{\text{GAT}}$ will be directly comp
 
 We anticipate three distinct empirical regimes for our Generalist RGAT, each carrying a fundamentally different implication for social learning theory:
 
-*   **Regime 1: Support for the Information-Theoretic Limit ($\beta_{\text{GAT}} \leq \beta_{\text{HST}}$):**  
-    If the GAT cannot exceed the bound, it provides strong empirical support that the HST bound represents a hard physical limit of information propagation, suggesting that rational equilibrium reasoning—despite its inefficiencies—is asymptotically rate-optimal.
+*   **Regime 1: Consistent with the Equilibrium Upper Bound ($\beta_{\text{GAT}} \leq \beta_{\text{HST}}$):**  
+    If the GAT cannot exceed the bound, results are consistent with the HST equilibrium benchmark. This supports the interpretation that rational equilibrium behavior can be rate-optimal in these settings, but it does not by itself prove a universal information-theoretic impossibility result.
     
 *   **Regime 2: Empirical Counter-Evidence via Existence Proof ($\beta_{\text{GAT}} > \beta_{\text{HST}}$):**  
-    If the GAT systematically outperforms the bound, it serves as an empirical existence proof that the learning barrier is not an absolute information-theoretic ceiling, but rather a pathological constraint imposed by the assumptions of game-theoretic rationality.
+    If the GAT systematically outperforms the bound, it serves as empirical evidence that the HST limit is specific to the equilibrium model assumptions, not a universal cap for all non-strategic learners.
     
 *   **Regime 3: Boundary Conditions of the Economic Framework:**  
     If $\beta_{\text{GAT}}$ scales with network size $n$ or varies across topologies, these empirical insights would suggest that the theoretical invariance claims of the HST model rely heavily on fragile equilibrium constraints rather than structural independence.

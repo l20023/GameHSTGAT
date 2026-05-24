@@ -24,6 +24,10 @@ def classify_regimes(aggregates: dict[str, Any], *, epsilon: float = 1e-9) -> di
     """
     Classify proposal regimes from aggregated beta and exceedance statistics.
 
+    Note:
+        This classification tracks consistency with the HST equilibrium bound,
+        not an information-theoretic impossibility bound for arbitrary learners.
+
     Returns a deterministic dictionary with booleans and diagnostics.
     """
     mean_beta_gaps = _collect_metric(aggregates, "mean_beta_gap")
@@ -37,7 +41,7 @@ def classify_regimes(aggregates: dict[str, Any], *, epsilon: float = 1e-9) -> di
         value <= epsilon for value in exceed_proportions
     )
 
-    supports_information_theoretic_limit = all_non_positive_gap and all_zero_exceedance
+    consistent_with_equilibrium_bound = all_non_positive_gap and all_zero_exceedance
     empirical_counter_evidence = any_positive_gap or any_exceedance
 
     beta_gat_variation = 0.0
@@ -55,14 +59,14 @@ def classify_regimes(aggregates: dict[str, Any], *, epsilon: float = 1e-9) -> di
         headline_label = "empirical_counter_evidence"
     elif boundary_condition_evidence:
         headline_label = "boundary_condition_evidence"
-    elif supports_information_theoretic_limit:
-        headline_label = "supports_information_theoretic_limit"
+    elif consistent_with_equilibrium_bound:
+        headline_label = "consistent_with_equilibrium_bound"
     else:
         headline_label = "inconclusive"
 
     return {
         "headline_label": headline_label,
-        "supports_information_theoretic_limit": supports_information_theoretic_limit,
+        "consistent_with_equilibrium_bound": consistent_with_equilibrium_bound,
         "empirical_counter_evidence": empirical_counter_evidence,
         "boundary_condition_evidence": boundary_condition_evidence,
         "diagnostics": {

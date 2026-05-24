@@ -19,8 +19,12 @@ The training script runs one configuration per invocation.
 - Default config highlights:
   - `wandb_project: game-theory-project`
   - `wandb_entity: GameHSTGAT`
+  - `device: auto` (prefers CUDA, then MPS, then CPU)
+  - `num_seeds: 5`
+  - `train_episodes: 5000` (fallback; grid uses adaptive `train_episodes_per_n`: 10→5000, 100→7000, 1000→10000)
   - `max_horizon: 100`
   - `communication_mode: fair_1bit` (default fair HST benchmark)
+  - grid defaults: `num_nodes_list=10,100,1000`, `signal_quality_list=0.55,0.6,0.7,0.8`
 
 Example:
 
@@ -45,11 +49,16 @@ This run automatically:
 - `--communication-mode` (`fair_1bit` or `vector`)
 - `--communication-dim` (used for `vector` mode)
 - `--learning-rate`
+- `--device` (`auto`, `cpu`, `cuda`, `mps`)
 - `--graph-cache-dir`
 - `--artifacts-dir`
 - `--wandb-project`
 - `--wandb-entity`
 - `--disable-beta-fit`
+
+Device behavior:
+- `auto` chooses `cuda` when available, otherwise `mps` when available, otherwise `cpu`.
+- Explicit `cuda` / `mps` requests fail fast if that backend is unavailable.
 
 ## Bash orchestration for multiple runs
 
@@ -92,26 +101,72 @@ bash scripts/run_experiment_fair.sh
 bash scripts/run_experiment_vector.sh
 ```
 
-Each script runs the full matrix (`n={10,50,100}`, `q={0.6,0.8}`, **3 seeds** `0..2`, `T=100` from config),
-writes a grid summary JSON, and builds per-run + seed-aggregated CSV tables.
+Each script runs the full matrix (`n={10,100,1000}`, `q={0.55,0.6,0.7,0.8}`, **5 seeds** `0..4`, `T=100` from config),
+writes a grid summary JSON, builds per-run + seed-aggregated CSV tables, and emits aggregate plots
+(beta_GAT vs q and beta_GAT vs n with error bars and HST reference lines).
 
 | Script | Mode | Artifacts | Summary |
 |--------|------|-----------|---------|
 | `run_experiment_fair.sh` | `fair_1bit` | `artifacts/training_metrics_fair/` | `artifacts/grid_summary_fair.json` |
 | `run_experiment_vector.sh` | `vector` (dim 32) | `artifacts/training_metrics_vector/` | `artifacts/grid_summary_vector.json` |
 
-Smoke test (3 seeds):
+Aggregate plots are written under `<artifacts_dir>/grid_runs/aggregate_plots/`.
+
+Smoke test (3 seeds, small grid):
 
 ```bash
-bash scripts/run_experiment_fair.sh --seeds 0,1,2
+bash scripts/run_experiment_fair.sh --seeds 0,1,2 --num-nodes-list 10 --signal-quality-list 0.6
 ```
+
+### SLURM grid runs (cluster)
+
+Parallel submission via SLURM job array (one task = one `(seed, n, q)` cell, all graph conditions in that job).
+Scripts live under `scripts/slurm/` and follow the same pattern as the example in `Beispiel für slurms/`.
+
+**Fair benchmark (max 20 parallel jobs):**
+
+```bash
+bash scripts/run_experiment_fair_slurm.sh 20
+# or directly:
+bash scripts/slurm/run_batch_slurms.sh 20 fair_1bit
+```
+
+**Vector ablation:**
+
+```bash
+bash scripts/run_experiment_vector_slurm.sh 20
+```
+
+**Smoke subset on cluster:**
+
+```bash
+SEEDS=0,1 NUM_NODES_LIST=10 SIGNAL_QUALITY_LIST=0.6 \
+  bash scripts/slurm/run_batch_slurms.sh 4 fair_1bit
+```
+
+Each submission:
+- submits a throttled array (`--array=1-N%MAX_PARALLEL`) where `N = seeds × |n| × |q|`
+- runs `scripts/run_grid_task.py --task-index $((SLURM_ARRAY_TASK_ID - 1))` per GPU job
+- optionally submits a finalize job (`finalize_job.sh`) that writes `grid_summary_*.json` and CSV tables
+
+Cluster defaults (in `scripts/slurm/job.sh`):
+- `REPO_DIR=/rds/user/lmk66/hpc-work/GameHSTGAT`
+- account `LIO-SL3-GPU`, partition `ampere`, `conda activate poly-shgnn-gpu`
+
+Skip finalize (e.g. while debugging array tasks):
+
+```bash
+SUBMIT_FINALIZE=0 bash scripts/slurm/run_batch_slurms.sh 20 fair_1bit
+```
+
+Logs are written to `logs/`.
 
 ### Low-level grid CLI
 
 `python scripts/run_grid.py --config configs/default.yaml`
 
-By default this runs **3 seeds** (`0..2`) from `num_seeds: 3` in `configs/default.yaml`.
-Override with `--seeds 0,1,2,3` or set an explicit list in YAML (`seeds: [0, 1, 2, ...]`).
+By default this runs **5 seeds** (`0..4`) from `num_seeds: 5` in `configs/default.yaml`.
+Override with `--seeds 0,1,2,3,4` or set an explicit list in YAML (`seeds: [0, 1, 2, ...]`).
 
 This writes:
 - per-run metrics under `<artifacts_dir>/grid_runs/...`
@@ -120,7 +175,7 @@ This writes:
 The summary also includes `regime_classification.headline_label` with one compact status:
 - `empirical_counter_evidence`
 - `boundary_condition_evidence`
-- `supports_information_theoretic_limit`
+- `consistent_with_equilibrium_bound`
 - `inconclusive`
 
 HST reference bound used in code:
@@ -137,15 +192,23 @@ Fairness protocol for HST comparison:
 
 - Graph cache: `artifacts/graphs`
 - Metrics: `artifacts/training_metrics/seed_<seed>/metrics.json` (compact by default)
-- Plots: `artifacts/.../seed_<seed>/plots/<condition>__free_alpha.png`, `<condition>__anchored_t1.png`, and `<condition>__train_loss.png`
+- Plots: `artifacts/.../seed_<seed>/plots/<condition>__anchored_t0.png` and `<condition>__train_loss.png`
 
 Each metrics file stores beta fit, HST comparison, and `train_loss_final`. W&B logs the
 full per-episode training loss curve under `<condition>/train_loss`. Full
 `train_loss_history` / `epsilon_series` arrays in JSON are omitted unless enabled in config.
 
-Learning-rate plots are emitted in two variants:
-- `__free_alpha`: legacy comparison where GAT/HST share fitted `(alpha, epsilon_inf)` and differ only in beta.
-- `__anchored_t1`: HST reference starts at measured `epsilon(1)` and then decays with `beta_HST_max`, which is more interpretable in early rounds.
+Learning-rate plots are emitted in anchored form:
+- `__anchored_t0`: both GAT and HST reference curves use the same fitted `epsilon_inf` and are anchored at `epsilon(0)=0.5`.
+- fit model: `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf`.
+
+Reading order for plots:
+1. Aggregate plots in `<artifacts_dir>/grid_runs/aggregate_plots/` give the headline view (beta vs q, beta vs n with HST reference).
+2. Per-condition `__anchored_t0` plots show the empirical decay vs both fits for a single seed/setting (use only for diagnostics).
+3. Per-seed `metrics.json` contains per-fit Wald CIs (`beta_std`, `beta_ci_lower`, `beta_ci_upper`) for sanity checks.
+
+Each condition now also includes:
+- `convergence_warning` (true when fitted `epsilon_inf > 0.05`)
 
 Config flags (`configs/default.yaml`):
 
@@ -170,3 +233,20 @@ Scan multiple artifact trees (e.g. grid + smoke) with repeated `--root`. Columns
 `beta_gat`, `beta_hst_max`, `beta_gap`, `exceeds_hst_bound`, and fit diagnostics per condition.
 
 For a full technical walkthrough of the model and design decisions, see `MODEL_README.md`.
+
+## Interpreting HST comparisons
+
+- `beta_GAT <= beta_HST_max` means the trained RGAT is slower than (or equal to) the HST equilibrium benchmark for that setup.
+- This is consistent with the equilibrium bound, but does **not** prove a universal information-theoretic impossibility result for all learning algorithms.
+- `beta_GAT > beta_HST_max` is empirical counter-evidence relative to the equilibrium model assumptions; it does not invalidate the HST theorem itself.
+
+## Artifact state in this repository
+
+- Active path for current fair runs: `artifacts/training_metrics_fair/`.
+- Historical runs are under `artifacts/First Trainings/` and include the broader `n={10,50,100}` sweeps.
+- The single observed exceedance in local artifacts appears at `n=50, q=0.6, complete, seed=0` in `First Trainings`; other seeds for that setting do not exceed.
+
+## Proposal vs implementation defaults
+
+- The implementation currently uses `max_horizon: 100`, adaptive `train_episodes_per_n` (5000/7000/10000 for n=10/100/1000), and `test_episodes: 1000`.
+- Older proposal text and early artifacts may reference `T_max=50` and larger training budgets; treat those as historical planning values.

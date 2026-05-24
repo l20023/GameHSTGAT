@@ -29,6 +29,12 @@ def compute_beta_hst_max(signal_quality: float) -> float:
         q=0.9 gives M ≈ 4.394.
 
         Source: https://arxiv.org/pdf/2112.14265 (Eq. (1), Theorem 1).
+
+        Interpretation:
+            This is an upper bound for equilibrium learning speed under the HST
+            model assumptions (strategic agents in Nash equilibrium), not a
+            universal information-theoretic impossibility bound for arbitrary
+            learning algorithms.
     """
     if not (0.5 < signal_quality < 1.0):
         raise ValueError("signal_quality must satisfy 0.5 < signal_quality < 1.0.")

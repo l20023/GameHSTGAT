@@ -1,5 +1,5 @@
 seed: 0
-num_seeds: 3
+num_seeds: 5
 num_nodes: 10
 
 wandb_project: game-theory-project
@@ -8,19 +8,29 @@ wandb_entity: GameHSTGAT
 graph_cache_dir: artifacts/graphs
 artifacts_dir: artifacts/training_metrics
 
-train_episodes: 5000
+train_episodes: 5000  # global fallback (conservative for weak signals, e.g. q=0.6)
+train_episodes_per_n:  # adaptive: more episodes for larger networks / weaker q
+  10: 5000
+  100: 7000
+  1000: 10000
 test_episodes: 1000
 max_horizon: 100
 signal_quality: 0.8
 
 learning_rate: 0.001
-hidden_dim: 32
+weight_decay: 0.0001
+dropout: 0.1
+device: auto
+hidden_dim: 64
 num_heads: 2
 communication_mode: fair_1bit
 communication_dim:
 
+validation_episodes: 50
+validation_eval_every: 100
+
 disable_beta_fit: false
 
 save_train_loss_history: false
-save_epsilon_series: false
+save_epsilon_series: true
 save_learning_rate_plots: true

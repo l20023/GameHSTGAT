@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -161,7 +163,15 @@ class GraphGenerator:
     def save_graph(data: Data, path: str | Path) -> None:
         graph_path = Path(path)
         graph_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(data, graph_path)
+        fd, tmp_path = tempfile.mkstemp(suffix=".pt.tmp", dir=graph_path.parent)
+        os.close(fd)
+        try:
+            torch.save(data, tmp_path)
+            os.replace(tmp_path, graph_path)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
 
     @staticmethod
     def load_graph(path: str | Path) -> Data:

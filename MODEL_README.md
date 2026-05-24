@@ -5,6 +5,7 @@ This document explains what the model does, how data flows through the system, a
 ## 1) Research goal
 
 The project studies whether a recurrent Graph Attention Network (RGAT) can match or exceed the social-learning speed bound discussed in Huang, Strack, Tamuz (HST).
+The comparison is between a gradient-trained neural learner and a bound proven for strategic agents in Nash equilibrium.
 
 Operationally, the pipeline trains an RGAT to predict the binary hidden state over time from:
 - each agent's private signals
@@ -60,6 +61,12 @@ Communication modes:
 - `fair_1bit` (default): only previous binary actions are visible to neighbors
 - `vector`: optional ablation mode with higher-dimensional visible messages
 
+STE fairness for `fair_1bit`:
+- Forward pass on the visible channel is strictly 1-bit (hard argmax of the previous-step prediction).
+- Backward pass routes gradients through the soft probability of the same prediction (straight-through estimator).
+- At evaluation time the channel is strictly 1-bit; the STE bridge is a training-only trick.
+- Therefore neighbors never observe more than one bit per round, which matches the HST communication channel.
+
 Per time step:
 1. message passing on previous visible neighbor messages
 2. concatenate current private signal
@@ -87,12 +94,12 @@ Trade-off:
 
 From trained models:
 - compute `epsilon(t)` over test episodes
-- fit exponential decay `epsilon(t) = alpha * exp(-beta * t) + epsilon_inf`
+- fit anchored exponential decay `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf`
   - primary method: `scipy.optimize.curve_fit`
   - fallback: log-linear fit when scipy fit fails
-- generate two learning-rate plot variants per condition:
-  - `free_alpha`: baseline visualization where GAT/HST share fitted `(alpha, epsilon_inf)`
-  - `anchored_t1`: HST reference anchored at empirical `epsilon(1)`, then decays with `beta_HST_max`
+- generate `anchored_t0` learning-rate plots per condition:
+  - both curves are anchored at `epsilon(0)=0.5` and share fitted `epsilon_inf`
+  - HST reference decays with `beta_HST_max`
 
 Bound comparison:
 - `beta_HST_max(q)` follows HST Theorem 1 in `src/hst_bound.py`
@@ -100,6 +107,7 @@ Bound comparison:
   - `beta_hst_max`
   - `beta_gap = beta_GAT - beta_HST_max`
   - `exceeds_hst_bound` (when fit succeeds)
+  - `convergence_warning` (true when fitted `epsilon_inf > 0.05`)
 
 Design choice:
 - keep theoretical function in one module so theory updates remain isolated.
@@ -140,7 +148,7 @@ It writes:
 ## 8) Regime classification logic
 
 `src/reporting.py` outputs:
-- `supports_information_theoretic_limit`
+- `consistent_with_equilibrium_bound`
 - `empirical_counter_evidence`
 - `boundary_condition_evidence`
 - `headline_label` (single dashboard-friendly status)
@@ -148,7 +156,7 @@ It writes:
 Headline precedence:
 1. `empirical_counter_evidence`
 2. `boundary_condition_evidence`
-3. `supports_information_theoretic_limit`
+3. `consistent_with_equilibrium_bound`
 4. `inconclusive`
 
 Design choice:
@@ -162,6 +170,7 @@ Config is merged in this order:
 3. CLI overrides
 
 Current important defaults:
+- `train_episodes: 5000` (fallback; grid uses `train_episodes_per_n`: 10→5000, 100→7000, 1000→10000)
 - `max_horizon: 100`
 - `wandb_project: game-theory-project`
 - `wandb_entity: GameHSTGAT`
@@ -173,8 +182,11 @@ Design choice:
 ## 10) Known simplifications and future upgrades
 
 Current simplifications:
-- no uncertainty intervals around beta estimates in summary
-- no automatic plotting in core pipeline
+- per-fit Wald CIs are reported, but cross-seed CI use mean of per-fit SE; full hierarchical model not used
+- vector mode is an ablation for channel bandwidth, not the strict HST-fair benchmark
+- RGAT is not a rational-equilibrium agent, so comparisons should be interpreted as benchmark comparisons against HST assumptions, not theorem refutations
+- 100 percent homophily on the ground-truth label is fixed across topologies
+- synthetic Bernoulli signals only; real social-data calibration is out of scope
 
 Recommended next upgrades:
 - add confidence intervals/bootstrapping for `beta_GAT`

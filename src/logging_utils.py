@@ -68,6 +68,7 @@ def log_condition_metrics(
         f"{condition_key}/beta_hst_max": metrics.get("beta_hst_max"),
         f"{condition_key}/beta_gap": metrics.get("beta_gap"),
         f"{condition_key}/exceeds_hst_bound": metrics.get("exceeds_hst_bound"),
+        f"{condition_key}/convergence_warning": metrics.get("convergence_warning"),
     }
     epsilon_series = metrics.get("epsilon_series", [])
     for t, epsilon_t in enumerate(epsilon_series, start=1):
@@ -82,21 +83,12 @@ def log_condition_metrics(
         except Exception:
             pass
 
-    free_alpha_plot = metrics.get("learning_rate_plot_free_alpha")
-    if isinstance(free_alpha_plot, str) and Path(free_alpha_plot).is_file():
-        try:
-            import wandb  # type: ignore
-
-            payload[f"{condition_key}/learning_rate_plot_free_alpha"] = wandb.Image(free_alpha_plot)
-        except Exception:
-            pass
-
-    anchored_plot = metrics.get("learning_rate_plot_anchored_t1")
+    anchored_plot = metrics.get("learning_rate_plot_anchored_t0")
     if isinstance(anchored_plot, str) and Path(anchored_plot).is_file():
         try:
             import wandb  # type: ignore
 
-            payload[f"{condition_key}/learning_rate_plot_anchored_t1"] = wandb.Image(anchored_plot)
+            payload[f"{condition_key}/learning_rate_plot_anchored_t0"] = wandb.Image(anchored_plot)
         except Exception:
             pass
 

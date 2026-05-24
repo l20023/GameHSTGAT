@@ -29,6 +29,7 @@ dist/
 
 # Experiment outputs and local artifacts
 artifacts/
+logs/
 *.pt
 *.pth
 *.ckpt

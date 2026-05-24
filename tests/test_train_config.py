@@ -34,6 +34,11 @@ def test_resolve_run_config_yaml_and_cli_override(tmp_path) -> None:
         max_horizon=None,
         signal_quality=None,
         learning_rate=None,
+        weight_decay=None,
+        dropout=None,
+        validation_episodes=None,
+        validation_eval_every=None,
+        device=None,
         hidden_dim=None,
         num_heads=None,
         communication_mode=None,
@@ -47,6 +52,7 @@ def test_resolve_run_config_yaml_and_cli_override(tmp_path) -> None:
     assert resolved["wandb_entity"] == "yaml-entity"
     assert resolved["communication_mode"] == "vector"
     assert resolved["communication_dim"] == 4
+    assert resolved["device"] == "auto"
 
 
 def test_parse_args_accepts_single_seed_and_num_nodes(monkeypatch) -> None:
@@ -59,8 +65,11 @@ def test_parse_args_accepts_single_seed_and_num_nodes(monkeypatch) -> None:
             "7",
             "--num-nodes",
             "100",
+            "--device",
+            "cpu",
         ],
     )
     args = train_script.parse_args()
     assert args.seed == 7
     assert args.num_nodes == 100
+    assert args.device == "cpu"

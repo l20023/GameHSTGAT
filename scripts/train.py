@@ -18,10 +18,15 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.graph_generator import GraphGenerator
 from src.config import load_yaml_config, merge_flat_config
+from src.grid_tasks import parse_train_episodes_per_n, resolve_train_episodes
 from src.logging_utils import finish_wandb_run, init_wandb_run, log_condition_metrics
 from src.learning_rate_plots import learning_rate_plot_path, save_learning_rate_plot
 from src.train_loss_plots import save_train_loss_plot, train_loss_plot_path
-from src.training_pipeline import condition_result_to_dict, run_condition_experiment
+from src.training_pipeline import (
+    condition_result_to_dict,
+    resolve_runtime_device,
+    run_condition_experiment,
+)
 
 
 PROPOSAL_WS_PROBS = [0.0, 0.1]
@@ -34,14 +39,20 @@ DEFAULT_RUN_CONFIG: dict[str, Any] = {
     "graph_cache_dir": "artifacts/graphs",
     "artifacts_dir": "artifacts/training_metrics",
     "train_episodes": 5000,
+    "train_episodes_per_n": None,
     "test_episodes": 1000,
     "max_horizon": 100,
     "signal_quality": 0.8,
     "learning_rate": 0.001,
-    "hidden_dim": 32,
+    "weight_decay": 1e-4,
+    "dropout": 0.1,
+    "device": "auto",
+    "hidden_dim": 64,
     "num_heads": 2,
     "communication_mode": "fair_1bit",
     "communication_dim": None,
+    "validation_episodes": 50,
+    "validation_eval_every": 100,
     "disable_beta_fit": False,
     "save_train_loss_history": False,
     "save_epsilon_series": False,
@@ -76,6 +87,11 @@ def run_single_seed(
     communication_mode: str,
     communication_dim: int | None,
     learning_rate: float,
+    weight_decay: float,
+    dropout: float,
+    validation_episodes: int,
+    validation_eval_every: int,
+    device: str,
     disable_beta_fit: bool,
     save_train_loss_history: bool,
     save_epsilon_series: bool,
@@ -83,6 +99,7 @@ def run_single_seed(
 ) -> dict:
     """Run full train/eval pipeline for one seed across all graph conditions."""
     set_global_seed(seed)
+    resolved_device = resolve_runtime_device(device)
     graphs = generator.generate_and_store_experiment_graphs(
         storage_dir=graph_cache_dir,
         num_nodes_list=[num_nodes],
@@ -102,6 +119,11 @@ def run_single_seed(
         "communication_mode": communication_mode,
         "communication_dim": communication_dim,
         "learning_rate": learning_rate,
+        "weight_decay": weight_decay,
+        "dropout": dropout,
+        "validation_episodes": validation_episodes,
+        "validation_eval_every": validation_eval_every,
+        "device": str(resolved_device),
         "disable_beta_fit": disable_beta_fit,
         "save_train_loss_history": save_train_loss_history,
         "save_epsilon_series": save_epsilon_series,
@@ -131,7 +153,12 @@ def run_single_seed(
                     communication_mode=communication_mode,
                     communication_dim=communication_dim,
                     learning_rate=learning_rate,
+                    weight_decay=weight_decay,
+                    dropout=dropout,
+                    validation_episodes=validation_episodes,
+                    validation_eval_every=validation_eval_every,
                     seed=seed,
+                    device=resolved_device,
                     disable_beta_fit=disable_beta_fit,
                 )
                 condition_metrics = condition_result_to_dict(
@@ -140,14 +167,14 @@ def run_single_seed(
                     save_epsilon_series=save_epsilon_series,
                 )
                 if save_learning_rate_plots:
-                    free_alpha_plot_path = learning_rate_plot_path(
+                    anchored_t0_plot_path = learning_rate_plot_path(
                         artifacts_dir=artifacts_dir,
                         seed=seed,
                         condition_key=key,
-                        plot_variant="free_alpha",
+                        plot_variant="anchored_t0",
                     )
                     save_learning_rate_plot(
-                        output_path=free_alpha_plot_path,
+                        output_path=anchored_t0_plot_path,
                         epsilon_series=result.epsilon_series,
                         beta_fit=result.beta_fit,
                         beta_hst_max=result.beta_hst_max,
@@ -155,28 +182,10 @@ def run_single_seed(
                         signal_quality=signal_quality,
                         beta_gap=result.beta_gap,
                         exceeds_hst_bound=result.exceeds_hst_bound,
-                        plot_variant="free_alpha",
+                        plot_variant="anchored_t0",
                     )
-                    anchored_t1_plot_path = learning_rate_plot_path(
-                        artifacts_dir=artifacts_dir,
-                        seed=seed,
-                        condition_key=key,
-                        plot_variant="anchored_t1",
-                    )
-                    save_learning_rate_plot(
-                        output_path=anchored_t1_plot_path,
-                        epsilon_series=result.epsilon_series,
-                        beta_fit=result.beta_fit,
-                        beta_hst_max=result.beta_hst_max,
-                        condition_key=key,
-                        signal_quality=signal_quality,
-                        beta_gap=result.beta_gap,
-                        exceeds_hst_bound=result.exceeds_hst_bound,
-                        plot_variant="anchored_t1",
-                    )
-                    condition_metrics["learning_rate_plot"] = str(free_alpha_plot_path)
-                    condition_metrics["learning_rate_plot_free_alpha"] = str(free_alpha_plot_path)
-                    condition_metrics["learning_rate_plot_anchored_t1"] = str(anchored_t1_plot_path)
+                    condition_metrics["learning_rate_plot"] = str(anchored_t0_plot_path)
+                    condition_metrics["learning_rate_plot_anchored_t0"] = str(anchored_t0_plot_path)
                     train_loss_path = train_loss_plot_path(
                         artifacts_dir=artifacts_dir,
                         seed=seed,
@@ -307,6 +316,37 @@ def parse_args() -> argparse.Namespace:
         help="Optimizer learning rate.",
     )
     parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=None,
+        help="Adam weight decay (L2 regularization).",
+    )
+    parser.add_argument(
+        "--dropout",
+        type=float,
+        default=None,
+        help="Dropout probability for GAT and head.",
+    )
+    parser.add_argument(
+        "--validation-episodes",
+        type=int,
+        default=None,
+        help="Held-out validation episodes for best-checkpoint selection (0 disables).",
+    )
+    parser.add_argument(
+        "--validation-eval-every",
+        type=int,
+        default=None,
+        help="Evaluate validation pool every N training episodes.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=["auto", "cpu", "cuda", "mps"],
+        default=None,
+        help="Runtime device selection (auto, cpu, cuda, mps).",
+    )
+    parser.add_argument(
         "--hidden-dim",
         type=int,
         default=None,
@@ -375,14 +415,23 @@ def resolve_run_config(args: argparse.Namespace) -> dict[str, Any]:
         "max_horizon": args.max_horizon,
         "signal_quality": args.signal_quality,
         "learning_rate": args.learning_rate,
+        "weight_decay": args.weight_decay,
+        "dropout": args.dropout,
+        "validation_episodes": args.validation_episodes,
+        "validation_eval_every": args.validation_eval_every,
+        "device": args.device,
         "hidden_dim": args.hidden_dim,
         "num_heads": args.num_heads,
         "communication_mode": args.communication_mode,
         "communication_dim": args.communication_dim,
         "disable_beta_fit": args.disable_beta_fit if args.disable_beta_fit else None,
-        "save_train_loss_history": args.save_train_loss_history if args.save_train_loss_history else None,
-        "save_epsilon_series": args.save_epsilon_series if args.save_epsilon_series else None,
-        "save_learning_rate_plots": False if args.no_learning_rate_plots else None,
+        "save_train_loss_history": (
+            True if getattr(args, "save_train_loss_history", False) else None
+        ),
+        "save_epsilon_series": True if getattr(args, "save_epsilon_series", False) else None,
+        "save_learning_rate_plots": (
+            False if getattr(args, "no_learning_rate_plots", False) else None
+        ),
     }
     config = merge_flat_config(
         defaults=DEFAULT_RUN_CONFIG,
@@ -401,15 +450,23 @@ def main() -> None:
     graph_cache_dir.mkdir(parents=True, exist_ok=True)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
+    train_episodes_per_n = parse_train_episodes_per_n(run_config.get("train_episodes_per_n"))
+    num_nodes = int(run_config["num_nodes"])
+    effective_train_episodes = resolve_train_episodes(
+        num_nodes=num_nodes,
+        train_episodes_per_n=train_episodes_per_n,
+        train_episodes_default=int(run_config["train_episodes"]),
+    )
+
     run_summary = run_single_seed(
         seed=int(run_config["seed"]),
         generator=generator,
-        num_nodes=int(run_config["num_nodes"]),
+        num_nodes=num_nodes,
         graph_cache_dir=graph_cache_dir,
         artifacts_dir=artifacts_dir,
         wandb_project=str(run_config["wandb_project"]),
         wandb_entity=(None if run_config["wandb_entity"] is None else str(run_config["wandb_entity"])),
-        train_episodes=int(run_config["train_episodes"]),
+        train_episodes=effective_train_episodes,
         test_episodes=int(run_config["test_episodes"]),
         max_horizon=int(run_config["max_horizon"]),
         signal_quality=float(run_config["signal_quality"]),
@@ -420,6 +477,11 @@ def main() -> None:
             None if run_config["communication_dim"] is None else int(run_config["communication_dim"])
         ),
         learning_rate=float(run_config["learning_rate"]),
+        weight_decay=float(run_config["weight_decay"]),
+        dropout=float(run_config["dropout"]),
+        validation_episodes=int(run_config["validation_episodes"]),
+        validation_eval_every=int(run_config["validation_eval_every"]),
+        device=str(run_config["device"]),
         disable_beta_fit=bool(run_config["disable_beta_fit"]),
         save_train_loss_history=bool(run_config["save_train_loss_history"]),
         save_epsilon_series=bool(run_config["save_epsilon_series"]),

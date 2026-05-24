@@ -9,7 +9,7 @@ import pytest
 from src.learning_rate_plots import learning_rate_plot_path, save_learning_rate_plot
 
 
-@pytest.mark.parametrize("plot_variant", ["free_alpha", "anchored_t1"])
+@pytest.mark.parametrize("plot_variant", ["anchored_t0"])
 def test_save_learning_rate_plot_writes_png(tmp_path: Path, plot_variant: str) -> None:
     epsilon_series = [0.4, 0.25, 0.15, 0.1, 0.08]
     beta_fit = {
@@ -17,7 +17,7 @@ def test_save_learning_rate_plot_writes_png(tmp_path: Path, plot_variant: str) -
         "beta": 0.3,
         "epsilon_inf": 0.05,
         "fit_success": True,
-        "method": "scipy_curve_fit",
+        "method": "scipy_anchored_t0",
     }
     output_path = tmp_path / f"plot_{plot_variant}.png"
     save_learning_rate_plot(
@@ -36,21 +36,12 @@ def test_save_learning_rate_plot_writes_png(tmp_path: Path, plot_variant: str) -
 
 
 def test_learning_rate_plot_path_sanitizes_condition_key() -> None:
-    free_alpha_path = learning_rate_plot_path(
+    anchored_t0_path = learning_rate_plot_path(
         artifacts_dir=Path("artifacts/fair"),
         seed=2,
         condition_key="n_10/ws_p_0.1_seed_2",
-        plot_variant="free_alpha",
+        plot_variant="anchored_t0",
     )
-    anchored_path = learning_rate_plot_path(
-        artifacts_dir=Path("artifacts/fair"),
-        seed=2,
-        condition_key="n_10/ws_p_0.1_seed_2",
-        plot_variant="anchored_t1",
-    )
-    assert free_alpha_path == Path(
-        "artifacts/fair/seed_2/plots/n_10__ws_p_0.1_seed_2__free_alpha.png"
-    )
-    assert anchored_path == Path(
-        "artifacts/fair/seed_2/plots/n_10__ws_p_0.1_seed_2__anchored_t1.png"
+    assert anchored_t0_path == Path(
+        "artifacts/fair/seed_2/plots/n_10__ws_p_0.1_seed_2__anchored_t0.png"
     )

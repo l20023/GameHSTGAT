@@ -78,6 +78,10 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
                 "beta_hst_max": 0.81,
                 "beta_gap": -0.51,
                 "exceeds_hst_bound": False,
+                "convergence_warning": False,
+                "train_loss_running_mean_final": 0.123,
+                "best_running_mean_loss": 0.1,
+                "best_episode_idx": 0,
             },
         )(),
     )
@@ -121,6 +125,11 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
         communication_mode="fair_1bit",
         communication_dim=None,
         learning_rate=0.001,
+        weight_decay=0.0,
+        dropout=0.0,
+        validation_episodes=0,
+        validation_eval_every=100,
+        device="cpu",
         disable_beta_fit=False,
         save_train_loss_history=False,
         save_epsilon_series=False,
@@ -150,6 +159,5 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
     assert metrics["seed"] == 0
     assert len(metrics["conditions"]) == 3
     complete_metrics = metrics["conditions"]["n_10/complete"]
-    assert complete_metrics["learning_rate_plot"].endswith("__free_alpha.png")
-    assert complete_metrics["learning_rate_plot_free_alpha"].endswith("__free_alpha.png")
-    assert complete_metrics["learning_rate_plot_anchored_t1"].endswith("__anchored_t1.png")
+    assert complete_metrics["learning_rate_plot"].endswith("__anchored_t0.png")
+    assert complete_metrics["learning_rate_plot_anchored_t0"].endswith("__anchored_t0.png")

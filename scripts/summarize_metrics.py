@@ -112,6 +112,11 @@ def load_metrics_records(metrics_path: Path) -> list[dict[str, Any]]:
         exceeds = metrics.get("exceeds_hst_bound")
         exceeds_bool = exceeds if isinstance(exceeds, bool) else None
 
+        convergence_warning = metrics.get("convergence_warning")
+        convergence_warning_bool = (
+            convergence_warning if isinstance(convergence_warning, bool) else None
+        )
+
         records.append(
             {
                 "seed": file_seed,
@@ -120,9 +125,13 @@ def load_metrics_records(metrics_path: Path) -> list[dict[str, Any]]:
                 "topology": topology,
                 "condition_key": condition_key,
                 "beta_gat": beta_gat,
+                "beta_gat_se": _finite_float(beta_fit.get("beta_std")),
+                "beta_gat_ci_lower": _finite_float(beta_fit.get("beta_ci_lower")),
+                "beta_gat_ci_upper": _finite_float(beta_fit.get("beta_ci_upper")),
                 "beta_hst_max": beta_hst,
                 "beta_gap": beta_gap_value,
                 "exceeds_hst_bound": exceeds_bool,
+                "convergence_warning": convergence_warning_bool,
                 "fit_method": beta_fit.get("method"),
                 "fit_success": beta_fit.get("fit_success"),
                 "fit_rmse": _finite_float(beta_fit.get("rmse")),
@@ -145,6 +154,9 @@ AGGREGATE_COLUMNS = [
     "n_seeds",
     "beta_gat_mean",
     "beta_gat_std",
+    "beta_gat_se_mean",
+    "beta_gat_ci_lower_mean",
+    "beta_gat_ci_upper_mean",
     "beta_gat_best",
     "beta_gat_best_seed",
     "beta_gap_at_best",
@@ -153,6 +165,7 @@ AGGREGATE_COLUMNS = [
     "beta_gap_mean",
     "beta_gap_std",
     "exceeds_hst_bound_rate",
+    "convergence_warning_rate",
     "fit_success_rate",
     "fit_r2_mean",
 ]
@@ -219,6 +232,24 @@ def aggregate_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if isinstance(item.get("beta_gat"), (int, float))
             and math.isfinite(float(item["beta_gat"]))
         ]
+        beta_gat_se_values = [
+            float(item["beta_gat_se"])
+            for item in group
+            if isinstance(item.get("beta_gat_se"), (int, float))
+            and math.isfinite(float(item["beta_gat_se"]))
+        ]
+        beta_gat_ci_lower_values = [
+            float(item["beta_gat_ci_lower"])
+            for item in group
+            if isinstance(item.get("beta_gat_ci_lower"), (int, float))
+            and math.isfinite(float(item["beta_gat_ci_lower"]))
+        ]
+        beta_gat_ci_upper_values = [
+            float(item["beta_gat_ci_upper"])
+            for item in group
+            if isinstance(item.get("beta_gat_ci_upper"), (int, float))
+            and math.isfinite(float(item["beta_gat_ci_upper"]))
+        ]
         beta_gap_values = [
             float(item["beta_gap"])
             for item in group
@@ -242,6 +273,11 @@ def aggregate_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             for item in group
             if isinstance(item.get("exceeds_hst_bound"), bool)
         ]
+        convergence_warning_values = [
+            bool(item["convergence_warning"])
+            for item in group
+            if isinstance(item.get("convergence_warning"), bool)
+        ]
         fit_success_values = [
             bool(item["fit_success"])
             for item in group
@@ -260,6 +296,21 @@ def aggregate_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     sum(beta_gat_values) / len(beta_gat_values) if beta_gat_values else None
                 ),
                 "beta_gat_std": _std(beta_gat_values),
+                "beta_gat_se_mean": (
+                    sum(beta_gat_se_values) / len(beta_gat_se_values)
+                    if beta_gat_se_values
+                    else None
+                ),
+                "beta_gat_ci_lower_mean": (
+                    sum(beta_gat_ci_lower_values) / len(beta_gat_ci_lower_values)
+                    if beta_gat_ci_lower_values
+                    else None
+                ),
+                "beta_gat_ci_upper_mean": (
+                    sum(beta_gat_ci_upper_values) / len(beta_gat_ci_upper_values)
+                    if beta_gat_ci_upper_values
+                    else None
+                ),
                 **best_run,
                 "beta_hst_max_mean": (
                     sum(beta_hst_values) / len(beta_hst_values) if beta_hst_values else None
@@ -271,6 +322,12 @@ def aggregate_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "exceeds_hst_bound_rate": (
                     sum(1 for value in exceeds_values if value) / len(exceeds_values)
                     if exceeds_values
+                    else None
+                ),
+                "convergence_warning_rate": (
+                    sum(1 for value in convergence_warning_values if value)
+                    / len(convergence_warning_values)
+                    if convergence_warning_values
                     else None
                 ),
                 "fit_success_rate": (
@@ -300,9 +357,13 @@ TABLE_COLUMNS = [
     "signal_quality",
     "topology",
     "beta_gat",
+    "beta_gat_se",
+    "beta_gat_ci_lower",
+    "beta_gat_ci_upper",
     "beta_hst_max",
     "beta_gap",
     "exceeds_hst_bound",
+    "convergence_warning",
     "fit_method",
     "fit_success",
     "fit_rmse",

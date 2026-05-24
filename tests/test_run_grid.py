@@ -67,6 +67,11 @@ def test_run_grid_experiments_aggregates_and_normalizes_conditions(
         communication_mode="fair_1bit",
         communication_dim=None,
         learning_rate=0.001,
+        weight_decay=0.0,
+        dropout=0.0,
+        validation_episodes=0,
+        validation_eval_every=100,
+        device="cpu",
         disable_beta_fit=False,
         save_train_loss_history=False,
         save_epsilon_series=False,
@@ -86,4 +91,105 @@ def test_run_grid_experiments_aggregates_and_normalizes_conditions(
     assert by_condition["ws_p_0.1"]["num_records"] == 2
     assert "regime_classification" in summary
     assert "headline_label" in summary["regime_classification"]
-    assert "supports_information_theoretic_limit" in summary["regime_classification"]
+    assert "consistent_with_equilibrium_bound" in summary["regime_classification"]
+
+
+def test_run_grid_uses_adaptive_train_episodes_per_n(tmp_path, monkeypatch) -> None:
+    """train_episodes_per_n should override train_episodes default for matching n."""
+    captured: list[tuple[int, int]] = []
+
+    def _fake_run_single_seed(**kwargs):
+        seed = int(kwargs["seed"])
+        num_nodes = int(kwargs["num_nodes"])
+        captured.append((num_nodes, int(kwargs["train_episodes"])))
+        artifacts_dir = Path(kwargs["artifacts_dir"])
+        metrics_path = artifacts_dir / f"seed_{seed}" / "metrics.json"
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text(
+            json.dumps({"seed": seed, "conditions": {}}), encoding="utf-8"
+        )
+        return {"seed": seed, "num_conditions": 0, "mean_final_loss": 0.0}
+
+    monkeypatch.setattr(run_grid, "run_single_seed", _fake_run_single_seed)
+
+    run_grid.run_grid_experiments(
+        seeds=[0],
+        num_nodes_list=[10, 100, 1000],
+        signal_quality_list=[0.6],
+        graph_cache_dir=tmp_path / "graphs",
+        artifacts_root=tmp_path / "grid_runs",
+        wandb_project="game-theory-project",
+        wandb_entity=None,
+        train_episodes=999,  # default fallback (should NOT be used for any n in the map)
+        test_episodes=2,
+        max_horizon=3,
+        hidden_dim=8,
+        num_heads=2,
+        communication_mode="fair_1bit",
+        communication_dim=None,
+        learning_rate=0.001,
+        weight_decay=0.0,
+        dropout=0.0,
+        validation_episodes=0,
+        validation_eval_every=100,
+        device="cpu",
+        disable_beta_fit=True,
+        save_train_loss_history=False,
+        save_epsilon_series=False,
+        save_learning_rate_plots=False,
+        train_episodes_per_n={10: 5000, 100: 7000, 1000: 10000},
+    )
+
+    captured_dict = dict(captured)
+    assert captured_dict[10] == 5000
+    assert captured_dict[100] == 7000
+    assert captured_dict[1000] == 10000
+
+
+def test_run_grid_falls_back_to_train_episodes_when_n_not_in_map(
+    tmp_path, monkeypatch
+) -> None:
+    captured: list[tuple[int, int]] = []
+
+    def _fake_run_single_seed(**kwargs):
+        seed = int(kwargs["seed"])
+        num_nodes = int(kwargs["num_nodes"])
+        captured.append((num_nodes, int(kwargs["train_episodes"])))
+        artifacts_dir = Path(kwargs["artifacts_dir"])
+        metrics_path = artifacts_dir / f"seed_{seed}" / "metrics.json"
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text(
+            json.dumps({"seed": seed, "conditions": {}}), encoding="utf-8"
+        )
+        return {"seed": seed, "num_conditions": 0, "mean_final_loss": 0.0}
+
+    monkeypatch.setattr(run_grid, "run_single_seed", _fake_run_single_seed)
+
+    run_grid.run_grid_experiments(
+        seeds=[0],
+        num_nodes_list=[42],  # not in the map
+        signal_quality_list=[0.6],
+        graph_cache_dir=tmp_path / "graphs",
+        artifacts_root=tmp_path / "grid_runs",
+        wandb_project="game-theory-project",
+        wandb_entity=None,
+        train_episodes=777,
+        test_episodes=2,
+        max_horizon=3,
+        hidden_dim=8,
+        num_heads=2,
+        communication_mode="fair_1bit",
+        communication_dim=None,
+        learning_rate=0.001,
+        weight_decay=0.0,
+        dropout=0.0,
+        validation_episodes=0,
+        validation_eval_every=100,
+        device="cpu",
+        disable_beta_fit=True,
+        save_train_loss_history=False,
+        save_epsilon_series=False,
+        save_learning_rate_plots=False,
+        train_episodes_per_n={10: 5000, 100: 7000, 1000: 10000},
+    )
+    assert captured[0] == (42, 777)
