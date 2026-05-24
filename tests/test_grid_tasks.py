@@ -8,10 +8,23 @@ import pytest
 
 from src.grid_tasks import (
     build_grid_tasks,
+    format_signal_quality_key,
+    format_signal_quality_label,
     parse_train_episodes_per_n,
     resolve_train_episodes,
     task_artifacts_dir,
 )
+
+
+def test_format_signal_quality_key_distinguishes_055_and_06() -> None:
+    assert format_signal_quality_key(0.55) == "0p55"
+    assert format_signal_quality_key(0.6) == "0p6"
+    assert format_signal_quality_key(0.8) == "0p8"
+
+
+def test_format_signal_quality_label() -> None:
+    assert format_signal_quality_label(0.55) == "0.55"
+    assert format_signal_quality_label(0.6) == "0.6"
 
 
 def test_build_grid_tasks_default_grid_has_sixty_tasks() -> None:
@@ -36,6 +49,22 @@ def test_build_grid_tasks_order_is_q_then_n_then_seed() -> None:
     assert (tasks[2].seed, tasks[2].num_nodes, tasks[2].signal_quality) == (0, 100, 0.6)
     assert (tasks[3].seed, tasks[3].num_nodes, tasks[3].signal_quality) == (1, 100, 0.6)
     assert (tasks[4].seed, tasks[4].num_nodes, tasks[4].signal_quality) == (0, 10, 0.8)
+
+
+def test_q055_and_q06_have_distinct_artifact_dirs() -> None:
+    tasks = build_grid_tasks(
+        seeds=[0],
+        num_nodes_list=[10],
+        signal_quality_list=[0.55, 0.6],
+    )
+    root = Path("artifacts/training_metrics_fair/grid_runs")
+    path_055 = task_artifacts_dir(root, tasks[0])
+    path_06 = task_artifacts_dir(root, tasks[1])
+    assert path_055 == Path("artifacts/training_metrics_fair/grid_runs/n_10/q_0p55")
+    assert path_06 == Path("artifacts/training_metrics_fair/grid_runs/n_10/q_0p6")
+    assert path_055 != path_06
+    assert tasks[0].setting_key == "n_10/q_0.55"
+    assert tasks[1].setting_key == "n_10/q_0.6"
 
 
 def test_task_artifacts_dir_matches_grid_layout() -> None:

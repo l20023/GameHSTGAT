@@ -14,7 +14,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.train import DEFAULT_CONFIG_PATH, DEFAULT_RUN_CONFIG
-from src.config import load_yaml_config, merge_flat_config, resolve_replication_seeds
+from src.config import (
+    build_grid_config_snapshot,
+    load_yaml_config,
+    merge_flat_config,
+    resolve_replication_seeds,
+)
 from src.grid_summary import build_grid_summary, collect_records_from_artifacts
 from src.grid_tasks import parse_csv_floats, parse_csv_ints, parse_train_episodes_per_n
 
@@ -101,26 +106,17 @@ def main() -> None:
 
     artifacts_root = args.artifacts_root
     records = collect_records_from_artifacts(artifacts_root)
-    grid_config = {
-        "seeds": seeds,
-        "num_nodes_list": num_nodes_list,
-        "signal_quality_list": signal_quality_list,
-        "train_episodes": int(run_config["train_episodes"]),
-        "train_episodes_per_n": train_episodes_per_n,
-        "test_episodes": int(run_config["test_episodes"]),
-        "max_horizon": int(run_config["max_horizon"]),
-        "hidden_dim": int(run_config["hidden_dim"]),
-        "num_heads": int(run_config["num_heads"]),
-        "communication_mode": args.communication_mode,
-        "communication_dim": args.communication_dim,
-        "learning_rate": float(run_config["learning_rate"]),
-        "device": str(run_config["device"]),
-        "disable_beta_fit": bool(run_config["disable_beta_fit"]),
-        "wandb_project": str(run_config["wandb_project"]),
-        "wandb_entity": run_config["wandb_entity"],
-        "graph_cache_dir": str(run_config["graph_cache_dir"]),
-        "artifacts_root": str(artifacts_root),
-    }
+    grid_config = build_grid_config_snapshot(
+        run_config=run_config,
+        seeds=seeds,
+        num_nodes_list=num_nodes_list,
+        signal_quality_list=signal_quality_list,
+        graph_cache_dir=Path(str(run_config["graph_cache_dir"])),
+        artifacts_root=artifacts_root,
+        communication_mode=args.communication_mode,
+        communication_dim=args.communication_dim,
+        train_episodes_per_n=train_episodes_per_n,
+    )
     summary = build_grid_summary(
         records=records,
         grid_config=grid_config,

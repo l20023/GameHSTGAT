@@ -6,7 +6,7 @@
 #   bash scripts/run_experiment_vector.sh --seeds 0,1,2
 #   COMMUNICATION_DIM=64 bash scripts/run_experiment_vector.sh
 #
-# Defaults: same matrix as fair run (3 seeds, T=100); vector channel dim 32.
+# Defaults: same matrix as fair run (5 seeds, n={10,100,1000}, q={0.55,0.6,0.7,0.8}); vector channel dim 32.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

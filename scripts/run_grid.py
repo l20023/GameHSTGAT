@@ -13,9 +13,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.train import DEFAULT_CONFIG_PATH, DEFAULT_RUN_CONFIG, run_single_seed
-from src.config import load_yaml_config, merge_flat_config, resolve_replication_seeds
+from src.config import (
+    build_grid_config_snapshot,
+    load_yaml_config,
+    merge_flat_config,
+    resolve_replication_seeds,
+)
 from src.graph_generator import GraphGenerator
-from src.grid_summary import build_grid_summary, normalize_condition_name
+from src.grid_summary import build_grid_summary, metrics_to_record
 from src.grid_tasks import (
     build_grid_tasks,
     parse_csv_floats,
@@ -120,44 +125,47 @@ def run_grid_experiments(
         metrics_path = setting_artifacts_dir / f"seed_{task.seed}" / "metrics.json"
         condition_metrics = _load_condition_metrics(metrics_path)
         for condition_key, metrics in condition_metrics.items():
-            beta_fit = metrics.get("beta_fit", {})
-            beta_gat = beta_fit.get("beta") if isinstance(beta_fit, dict) else None
             records.append(
-                {
-                    "seed": task.seed,
-                    "num_nodes": task.num_nodes,
-                    "signal_quality": task.signal_quality,
-                    "setting_key": task.setting_key,
-                    "condition_key": condition_key,
-                    "condition_name": normalize_condition_name(condition_key),
-                    "beta_gat": beta_gat,
-                    "beta_hst_max": metrics.get("beta_hst_max"),
-                    "beta_gap": metrics.get("beta_gap"),
-                    "exceeds_hst_bound": metrics.get("exceeds_hst_bound"),
-                    "artifact_path": str(metrics_path),
-                }
+                metrics_to_record(
+                    seed=task.seed,
+                    num_nodes=task.num_nodes,
+                    signal_quality=task.signal_quality,
+                    setting_key=task.setting_key,
+                    condition_key=condition_key,
+                    metrics=metrics,
+                    artifact_path=str(metrics_path),
+                )
             )
 
-    grid_config = {
-        "seeds": seeds,
-        "num_nodes_list": num_nodes_list,
-        "signal_quality_list": signal_quality_list,
-        "train_episodes": train_episodes,
-        "train_episodes_per_n": train_episodes_per_n,
-        "test_episodes": test_episodes,
-        "max_horizon": max_horizon,
-        "hidden_dim": hidden_dim,
-        "num_heads": num_heads,
-        "communication_mode": communication_mode,
-        "communication_dim": communication_dim,
-        "learning_rate": learning_rate,
-        "device": device,
-        "disable_beta_fit": disable_beta_fit,
-        "wandb_project": wandb_project,
-        "wandb_entity": wandb_entity,
-        "graph_cache_dir": str(graph_cache_dir),
-        "artifacts_root": str(artifacts_root),
-    }
+    grid_config = build_grid_config_snapshot(
+        run_config={
+            "train_episodes": train_episodes,
+            "test_episodes": test_episodes,
+            "max_horizon": max_horizon,
+            "hidden_dim": hidden_dim,
+            "num_heads": num_heads,
+            "learning_rate": learning_rate,
+            "weight_decay": weight_decay,
+            "dropout": dropout,
+            "validation_episodes": validation_episodes,
+            "validation_eval_every": validation_eval_every,
+            "device": device,
+            "disable_beta_fit": disable_beta_fit,
+            "save_train_loss_history": save_train_loss_history,
+            "save_epsilon_series": save_epsilon_series,
+            "save_learning_rate_plots": save_learning_rate_plots,
+            "wandb_project": wandb_project,
+            "wandb_entity": wandb_entity,
+        },
+        seeds=seeds,
+        num_nodes_list=num_nodes_list,
+        signal_quality_list=signal_quality_list,
+        graph_cache_dir=graph_cache_dir,
+        artifacts_root=artifacts_root,
+        communication_mode=communication_mode,
+        communication_dim=communication_dim,
+        train_episodes_per_n=train_episodes_per_n,
+    )
     return build_grid_summary(
         records=records,
         grid_config=grid_config,
@@ -232,6 +240,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--communication-dim", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument("--weight-decay", type=float, default=None)
+    parser.add_argument("--dropout", type=float, default=None)
+    parser.add_argument("--validation-episodes", type=int, default=None)
+    parser.add_argument("--validation-eval-every", type=int, default=None)
     parser.add_argument(
         "--device",
         type=str,
@@ -239,6 +251,9 @@ def parse_args() -> argparse.Namespace:
         default=None,
     )
     parser.add_argument("--disable-beta-fit", action="store_true")
+    parser.add_argument("--save-train-loss-history", action="store_true")
+    parser.add_argument("--save-epsilon-series", action="store_true")
+    parser.add_argument("--no-learning-rate-plots", action="store_true")
     return parser.parse_args()
 
 
@@ -257,8 +272,19 @@ def resolve_run_config(args: argparse.Namespace) -> dict[str, Any]:
         "communication_mode": args.communication_mode,
         "communication_dim": args.communication_dim,
         "learning_rate": args.learning_rate,
+        "weight_decay": args.weight_decay,
+        "dropout": args.dropout,
+        "validation_episodes": args.validation_episodes,
+        "validation_eval_every": args.validation_eval_every,
         "device": args.device,
         "disable_beta_fit": args.disable_beta_fit if args.disable_beta_fit else None,
+        "save_train_loss_history": (
+            True if getattr(args, "save_train_loss_history", False) else None
+        ),
+        "save_epsilon_series": True if getattr(args, "save_epsilon_series", False) else None,
+        "save_learning_rate_plots": (
+            False if getattr(args, "no_learning_rate_plots", False) else None
+        ),
     }
     return merge_flat_config(
         defaults=DEFAULT_RUN_CONFIG,

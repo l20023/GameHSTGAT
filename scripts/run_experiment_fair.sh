@@ -6,7 +6,7 @@
 #   bash scripts/run_experiment_fair.sh --seeds 0,1,2          # smoke / subset
 #   CONFIG=configs/default.yaml bash scripts/run_experiment_fair.sh
 #
-# Defaults: 3 seeds (0..2), T=100, n in {10,50,100}, q in {0.6,0.8}, fair_1bit.
+# Defaults: 5 seeds (0..4), T=100, n in {10,100,1000}, q in {0.55,0.6,0.7,0.8}, fair_1bit.
 # Pass any extra run_grid.py flags after the script name (see examples above).
 set -euo pipefail
 

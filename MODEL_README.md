@@ -28,6 +28,9 @@ Core modules:
 - `src/reporting.py`: regime classification for aggregated outputs
 - `scripts/train.py`: single configured run
 - `scripts/run_grid.py`: orchestrated proposal grid runs and aggregation
+- `scripts/run_grid_task.py`: single grid cell (SLURM array worker)
+- `scripts/finalize_grid.py`: post-grid aggregation from artifacts
+- `scripts/slurm/run_batch_slurms.sh`: throttled SLURM array submission
 
 ## 3) Data and graph setup
 
@@ -95,6 +98,7 @@ Trade-off:
 From trained models:
 - compute `epsilon(t)` over test episodes
 - fit anchored exponential decay `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf`
+  - fit uses discrete test indices `t = 1..T` (first observed error after round 1); anchor `epsilon(0)=0.5` is implicit
   - primary method: `scipy.optimize.curve_fit`
   - fallback: log-linear fit when scipy fit fails
 - generate `anchored_t0` learning-rate plots per condition:
@@ -138,12 +142,19 @@ Reference:
 - signal qualities
 
 It writes:
-- per-run condition metrics
+- per-run condition metrics under `grid_runs/n_{N}/q_{key}/seed_{S}/` (e.g. `q_0p55` vs `q_0p6`)
 - aggregate summary with:
   - `by_setting`
   - `by_condition`
   - `by_setting_and_condition`
   - `regime_classification`
+
+### SLURM grid (cluster)
+
+- `bash scripts/slurm/run_batch_slurms.sh 20 fair_1bit` submits 60 tasks (5 seeds × 3 n × 4 q) with throttling
+- each task runs `scripts/run_grid_task.py --task-index ...`
+- `scripts/slurm/finalize_job.sh` aggregates artifacts after the array completes
+- walltime is per network size (one array submit per n): 2h / 4h / 8h for n=10/100/1000 — override via `SBATCH_TIME_N10`, `SBATCH_TIME_N100`, `SBATCH_TIME_N1000`
 
 ## 8) Regime classification logic
 
@@ -151,13 +162,15 @@ It writes:
 - `consistent_with_equilibrium_bound`
 - `empirical_counter_evidence`
 - `boundary_condition_evidence`
+- `insufficient_fit_quality` / `high_convergence_warning_rate` (quality gates)
 - `headline_label` (single dashboard-friendly status)
 
 Headline precedence:
-1. `empirical_counter_evidence`
-2. `boundary_condition_evidence`
-3. `consistent_with_equilibrium_bound`
-4. `inconclusive`
+1. `inconclusive` if fit success rate is low or convergence warnings are frequent
+2. `empirical_counter_evidence`
+3. `boundary_condition_evidence`
+4. `consistent_with_equilibrium_bound`
+5. `inconclusive` (fallback)
 
 Design choice:
 - precedence is intentional: if strong counter-evidence exists, it should dominate summary labeling.
@@ -170,8 +183,10 @@ Config is merged in this order:
 3. CLI overrides
 
 Current important defaults:
+- `num_seeds: 5` (seeds `0..4` in grid runs)
 - `train_episodes: 5000` (fallback; grid uses `train_episodes_per_n`: 10→5000, 100→7000, 1000→10000)
 - `max_horizon: 100`
+- `save_epsilon_series: true`
 - `wandb_project: game-theory-project`
 - `wandb_entity: GameHSTGAT`
 - `communication_mode: fair_1bit`

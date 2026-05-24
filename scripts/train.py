@@ -55,7 +55,7 @@ DEFAULT_RUN_CONFIG: dict[str, Any] = {
     "validation_eval_every": 100,
     "disable_beta_fit": False,
     "save_train_loss_history": False,
-    "save_epsilon_series": False,
+    "save_epsilon_series": True,
     "save_learning_rate_plots": True,
 }
 

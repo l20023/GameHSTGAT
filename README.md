@@ -62,25 +62,25 @@ Device behavior:
 
 ## Bash orchestration for multiple runs
 
-Run 3 replication seeds (single setting, e.g. `n=50`):
+Run 5 replication seeds (single setting, e.g. `n=10`):
 
 ```bash
-for seed in $(seq 0 2); do
-  python scripts/train.py --config configs/default.yaml --seed "$seed" --num-nodes 50
+for seed in $(seq 0 4); do
+  python scripts/train.py --config configs/default.yaml --seed "$seed" --num-nodes 10
 done
 ```
 
 Or use the helper script:
 
 ```bash
-bash scripts/run_replication.sh configs/default.yaml 50
-# optional third arg: number of seeds (default 3 -> seeds 0..2)
+bash scripts/run_replication.sh configs/default.yaml 10
+# optional third arg: number of seeds (default 5 -> seeds 0..4)
 ```
 
 Run multiple node sizes:
 
 ```bash
-for n in 10 50 100; do
+for n in 10 100 1000; do
   python scripts/train.py --config configs/default.yaml --seed 0 --num-nodes "$n"
 done
 ```
@@ -153,6 +153,22 @@ Cluster defaults (in `scripts/slurm/job.sh`):
 - `REPO_DIR=/rds/user/lmk66/hpc-work/GameHSTGAT`
 - account `LIO-SL3-GPU`, partition `ampere`, `conda activate poly-shgnn-gpu`
 
+Adaptive walltime — **one SLURM array per n** (shorter requests queue faster on busy GPU partitions):
+
+| n | default walltime | env override |
+|---|------------------|--------------|
+| 10 | 02:00:00 | `SBATCH_TIME_N10` |
+| 100 | 04:00:00 | `SBATCH_TIME_N100` |
+| 1000 | 08:00:00 | `SBATCH_TIME_N1000` |
+
+Shorter requests improve queue priority on busy partitions. If a tier times out, re-submit only that tier with a higher override — do not raise all tiers at once.
+
+Example:
+
+```bash
+SBATCH_TIME_N1000=08:00:00 bash scripts/slurm/run_batch_slurms.sh 20 fair_1bit
+```
+
 Skip finalize (e.g. while debugging array tasks):
 
 ```bash
@@ -173,10 +189,10 @@ This writes:
 - an aggregated summary JSON at `artifacts/grid_summary.json` (override via `--output`)
 
 The summary also includes `regime_classification.headline_label` with one compact status:
+- `inconclusive` (insufficient fit quality or high `convergence_warning` rate)
 - `empirical_counter_evidence`
 - `boundary_condition_evidence`
 - `consistent_with_equilibrium_bound`
-- `inconclusive`
 
 HST reference bound used in code:
 - `beta_HST_max(q) = 2 * log(q/(1-q))` for binary symmetric signals
@@ -213,17 +229,16 @@ Each condition now also includes:
 Config flags (`configs/default.yaml`):
 
 - `save_train_loss_history: false`
-- `save_epsilon_series: false`
+- `save_epsilon_series: true`
 - `save_learning_rate_plots: true`
 
 ### Summarize all metrics into one table
 
 ```bash
 python scripts/summarize_metrics.py \
-  --root artifacts/training_metrics/grid_runs \
-  --csv artifacts/metrics_summary.csv \
-  --aggregate-csv artifacts/metrics_summary_by_topology.csv \
-  --aggregate-markdown artifacts/metrics_summary_by_topology.md
+  --root artifacts/training_metrics_fair/grid_runs \
+  --csv artifacts/metrics_summary_fair.csv \
+  --aggregate-csv artifacts/metrics_summary_fair_aggregated.csv
 ```
 
 `--aggregate-csv` reports mean/std of `beta_gat` and `beta_gap` across seeds per topology,

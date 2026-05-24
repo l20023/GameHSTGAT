@@ -20,7 +20,7 @@ def test_resolve_replication_seeds_from_num_seeds() -> None:
 
 
 def test_resolve_replication_seeds_default_count() -> None:
-    assert resolve_replication_seeds(run_config={}) == list(range(3))
+    assert resolve_replication_seeds(run_config={}) == list(range(5))
 
 
 def test_resolve_replication_seeds_rejects_empty_cli() -> None:

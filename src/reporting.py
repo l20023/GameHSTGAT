@@ -30,6 +30,17 @@ def classify_regimes(aggregates: dict[str, Any], *, epsilon: float = 1e-9) -> di
 
     Returns a deterministic dictionary with booleans and diagnostics.
     """
+    by_setting = aggregates.get("by_setting", {})
+    fit_success_rates = _collect_metric(aggregates, "fit_success_rate")
+    convergence_warning_rates = _collect_metric(aggregates, "convergence_warning_rate")
+
+    insufficient_fit_quality = not fit_success_rates or not any(
+        rate >= 0.5 for rate in fit_success_rates
+    )
+    high_convergence_warning_rate = any(
+        rate > 0.5 for rate in convergence_warning_rates
+    )
+
     mean_beta_gaps = _collect_metric(aggregates, "mean_beta_gap")
     exceed_proportions = _collect_metric(aggregates, "proportion_exceeds_hst_bound")
     mean_beta_gat_values = _collect_metric(aggregates, "mean_beta_gat")
@@ -55,7 +66,9 @@ def classify_regimes(aggregates: dict[str, Any], *, epsilon: float = 1e-9) -> di
         exceedance_variation > epsilon
     )
 
-    if empirical_counter_evidence:
+    if insufficient_fit_quality or high_convergence_warning_rate:
+        headline_label = "inconclusive"
+    elif empirical_counter_evidence:
         headline_label = "empirical_counter_evidence"
     elif boundary_condition_evidence:
         headline_label = "boundary_condition_evidence"
@@ -69,13 +82,23 @@ def classify_regimes(aggregates: dict[str, Any], *, epsilon: float = 1e-9) -> di
         "consistent_with_equilibrium_bound": consistent_with_equilibrium_bound,
         "empirical_counter_evidence": empirical_counter_evidence,
         "boundary_condition_evidence": boundary_condition_evidence,
+        "insufficient_fit_quality": insufficient_fit_quality,
+        "high_convergence_warning_rate": high_convergence_warning_rate,
         "diagnostics": {
+            "num_settings": len(by_setting) if isinstance(by_setting, dict) else 0,
             "num_settings_with_beta_gap": len(mean_beta_gaps),
             "num_settings_with_exceedance": len(exceed_proportions),
+            "num_settings_with_fit_success_rate": len(fit_success_rates),
+            "num_settings_with_convergence_warning_rate": len(convergence_warning_rates),
             "mean_beta_gap_min": min(mean_beta_gaps) if mean_beta_gaps else None,
             "mean_beta_gap_max": max(mean_beta_gaps) if mean_beta_gaps else None,
             "proportion_exceeds_min": min(exceed_proportions) if exceed_proportions else None,
             "proportion_exceeds_max": max(exceed_proportions) if exceed_proportions else None,
+            "fit_success_rate_min": min(fit_success_rates) if fit_success_rates else None,
+            "fit_success_rate_max": max(fit_success_rates) if fit_success_rates else None,
+            "convergence_warning_rate_max": (
+                max(convergence_warning_rates) if convergence_warning_rates else None
+            ),
             "beta_gat_variation": beta_gat_variation,
             "exceedance_variation": exceedance_variation,
         },

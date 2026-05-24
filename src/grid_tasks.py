@@ -33,8 +33,19 @@ def parse_csv_floats(value: str) -> list[float]:
     return parsed
 
 
+def format_signal_quality_label(signal_quality: float) -> str:
+    """Human-readable q label for setting keys, e.g. 0.55 -> '0.55'."""
+    return f"{signal_quality:.2f}".rstrip("0").rstrip(".")
+
+
+def format_signal_quality_key(signal_quality: float) -> str:
+    """Filesystem-safe q key without rounding collisions, e.g. 0.55 -> '0p55'."""
+    return format_signal_quality_label(signal_quality).replace(".", "p")
+
+
 def format_signal_quality(signal_quality: float) -> str:
-    return f"{signal_quality:.1f}".replace(".", "p")
+    """Alias for filesystem key (backward compatibility)."""
+    return format_signal_quality_key(signal_quality)
 
 
 def parse_train_episodes_per_n(raw: Any) -> dict[int, int] | None:
@@ -70,8 +81,8 @@ def build_grid_tasks(
     task_index = 0
     for signal_quality in signal_quality_list:
         for num_nodes in num_nodes_list:
-            quality_key = format_signal_quality(signal_quality)
-            setting_key = f"n_{num_nodes}/q_{signal_quality:.1f}"
+            quality_key = format_signal_quality_key(signal_quality)
+            setting_key = f"n_{num_nodes}/q_{format_signal_quality_label(signal_quality)}"
             for seed in seeds:
                 tasks.append(
                     GridTask(
@@ -95,6 +106,8 @@ __all__ = [
     "GridTask",
     "build_grid_tasks",
     "format_signal_quality",
+    "format_signal_quality_key",
+    "format_signal_quality_label",
     "parse_csv_floats",
     "parse_csv_ints",
     "parse_train_episodes_per_n",
