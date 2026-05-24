@@ -182,6 +182,7 @@ def run_single_seed(
                         signal_quality=signal_quality,
                         beta_gap=result.beta_gap,
                         exceeds_hst_bound=result.exceeds_hst_bound,
+                        convergence_warning=result.convergence_warning,
                         plot_variant="anchored_t0",
                     )
                     condition_metrics["learning_rate_plot"] = str(anchored_t0_plot_path)

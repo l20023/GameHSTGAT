@@ -7,9 +7,51 @@ from typing import Any, Literal
 
 import numpy as np
 
-from .training_pipeline import exponential_decay_values
+from .training_pipeline import (
+    DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
+    exponential_decay_values,
+)
 
 PlotVariant = Literal["anchored_t0"]
+
+
+def _build_learning_rate_suptitle(
+    *,
+    condition_key: str,
+    signal_quality: float,
+    beta_gap: float | None,
+    exceeds_hst_bound: bool | None,
+    convergence_warning: bool,
+    epsilon_inf: float | None,
+    fit_success: bool,
+    convergence_warning_threshold: float,
+) -> str:
+    """Assemble the figure suptitle including quality and bound flags."""
+    parts = [f"{condition_key}  |  q={signal_quality:.2f}"]
+
+    if isinstance(beta_gap, float) and np.isfinite(beta_gap):
+        parts.append(f"gap={beta_gap:.3f}")
+
+    if convergence_warning:
+        eps_label = (
+            f"{epsilon_inf:.3f}"
+            if isinstance(epsilon_inf, (int, float)) and np.isfinite(float(epsilon_inf))
+            else "?"
+        )
+        parts.append(
+            f"convergence warning (fitted "
+            rf"$\varepsilon_\infty$={eps_label} > {convergence_warning_threshold:.2f})"
+        )
+        parts.append("bound comparison suppressed")
+    elif isinstance(exceeds_hst_bound, bool):
+        parts.append("exceeds bound" if exceeds_hst_bound else "within bound")
+    elif not fit_success:
+        parts.append("bound comparison n/a (fit failed)")
+
+    if not fit_success:
+        parts.append("fit failed")
+
+    return "  |  ".join(parts)
 
 
 def learning_rate_plot_path(
@@ -35,6 +77,8 @@ def save_learning_rate_plot(
     signal_quality: float,
     beta_gap: float | None = None,
     exceeds_hst_bound: bool | None = None,
+    convergence_warning: bool = False,
+    convergence_warning_threshold: float = DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
     plot_variant: PlotVariant = "anchored_t0",
 ) -> Path:
     """
@@ -42,7 +86,8 @@ def save_learning_rate_plot(
 
     Left panel (linear y):
         Empirical error rate epsilon(t) over rounds with the fitted GAT decay
-        curve overlaid. This panel shows absolute error magnitude over time.
+        curve and an HST reference decay (same anchor and epsilon_inf as the
+        slope panel) overlaid. This panel shows absolute error magnitude over time.
 
     Right panel (log y):
         Log-scale view of (epsilon(t) - epsilon_inf), which makes the slope
@@ -93,6 +138,9 @@ def save_learning_rate_plot(
         markersize=4,
         label=r"$\varepsilon(t)$ empirical",
     )
+    floor = 1e-4
+    anchor_t = float(t_values[0])
+    anchor_residual = 0.0
     if can_plot_curves:
         alpha_f = float(alpha)
         beta_gat_f = float(beta_gat)
@@ -108,6 +156,20 @@ def save_learning_rate_plot(
             linewidth=2.0,
             label=rf"GAT fit ($\beta_{{\mathrm{{GAT}}}}$={beta_gat_f:.3f})",
         )
+        anchor_residual = max(float(empirical[0]) - epsilon_inf_f, floor)
+        if anchor_residual > 0.0:
+            beta_hst_f = float(beta_hst_max)
+            hst_curve = epsilon_inf_f + anchor_residual * np.exp(
+                -beta_hst_f * (t_values - anchor_t)
+            )
+            ax_lin.plot(
+                t_values,
+                hst_curve,
+                "--",
+                color="#d62728",
+                linewidth=2.0,
+                label=rf"HST max slope ($\beta_{{\mathrm{{HST}}}}$={beta_hst_f:.3f})",
+            )
     if plateau_detected and 0 < fit_window_t_max < len(epsilon_series):
         ax_lin.axvline(
             x=float(fit_window_t_max),
@@ -122,6 +184,33 @@ def save_learning_rate_plot(
             color="grey",
             alpha=0.08,
         )
+    threshold_style = {
+        "color": "#ff7f0e",
+        "linestyle": "-.",
+        "linewidth": 1.8 if convergence_warning else 1.0,
+        "alpha": 1.0 if convergence_warning else 0.55,
+    }
+    ax_lin.axhline(
+        y=float(convergence_warning_threshold),
+        label=rf"convergence threshold ($\varepsilon_\infty \leq "
+        rf"{convergence_warning_threshold:.2f}$)",
+        **threshold_style,
+    )
+    if (
+        convergence_warning
+        and can_plot_curves
+        and isinstance(epsilon_inf, (int, float))
+        and np.isfinite(float(epsilon_inf))
+    ):
+        epsilon_inf_f = float(epsilon_inf)
+        ax_lin.axhline(
+            y=epsilon_inf_f,
+            color="#ff7f0e",
+            linestyle=":",
+            linewidth=1.2,
+            alpha=0.9,
+            label=rf"fitted $\varepsilon_\infty$={epsilon_inf_f:.3f}",
+        )
     ax_lin.set_xlabel("Round $t$")
     ax_lin.set_ylabel(r"Error rate $\varepsilon(t)$")
     ax_lin.set_ylim(bottom=0.0)
@@ -130,7 +219,6 @@ def save_learning_rate_plot(
     ax_lin.set_title("Empirical decay (linear)", fontsize=11)
 
     # ---- Right panel: log y, slope comparison ----
-    floor = 1e-4
     if can_plot_curves:
         residual = np.maximum(empirical - float(epsilon_inf), floor)
     else:
@@ -146,14 +234,13 @@ def save_learning_rate_plot(
         label=r"$\varepsilon(t)-\varepsilon_\infty$ empirical",
     )
 
-    # Anchor both slope reference lines at the first finite empirical residual.
-    anchor_t = float(t_values[0])
+    # Anchor slope reference lines at the first empirical excess-error point.
     anchor_y = float(residual[0])
-    if can_plot_curves and anchor_y > 0.0:
+    if can_plot_curves and anchor_residual > 0.0:
         beta_gat_f = float(beta_gat)
         beta_hst_f = float(beta_hst_max)
-        gat_slope_line = anchor_y * np.exp(-beta_gat_f * (t_values - anchor_t))
-        hst_slope_line = anchor_y * np.exp(-beta_hst_f * (t_values - anchor_t))
+        gat_slope_line = anchor_residual * np.exp(-beta_gat_f * (t_values - anchor_t))
+        hst_slope_line = anchor_residual * np.exp(-beta_hst_f * (t_values - anchor_t))
         ax_log.semilogy(
             t_values,
             gat_slope_line,
@@ -196,12 +283,22 @@ def save_learning_rate_plot(
     y_ceiling = max(float(np.max(residual)) * 1.5, 1.0)
     ax_log.set_ylim(bottom=y_floor, top=y_ceiling)
 
-    suptitle = f"{condition_key}  |  q={signal_quality:.2f}"
-    if isinstance(beta_gap, float) and np.isfinite(beta_gap):
-        suptitle += f"  |  gap={beta_gap:.3f}"
-    if isinstance(exceeds_hst_bound, bool):
-        suptitle += "  |  exceeds bound" if exceeds_hst_bound else "  |  within bound"
-    fig.suptitle(suptitle, fontsize=12)
+    epsilon_inf_value = (
+        float(epsilon_inf)
+        if isinstance(epsilon_inf, (int, float)) and np.isfinite(float(epsilon_inf))
+        else None
+    )
+    suptitle = _build_learning_rate_suptitle(
+        condition_key=condition_key,
+        signal_quality=signal_quality,
+        beta_gap=beta_gap,
+        exceeds_hst_bound=exceeds_hst_bound,
+        convergence_warning=convergence_warning,
+        epsilon_inf=epsilon_inf_value,
+        fit_success=fit_success,
+        convergence_warning_threshold=convergence_warning_threshold,
+    )
+    fig.suptitle(suptitle, fontsize=11)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
@@ -210,4 +307,9 @@ def save_learning_rate_plot(
     return output_path
 
 
-__all__ = ["PlotVariant", "learning_rate_plot_path", "save_learning_rate_plot"]
+__all__ = [
+    "PlotVariant",
+    "_build_learning_rate_suptitle",
+    "learning_rate_plot_path",
+    "save_learning_rate_plot",
+]
