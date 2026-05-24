@@ -28,7 +28,7 @@ dist/
 .vscode/
 
 # Experiment outputs and local artifacts
-artifacts/
+
 logs/
 *.pt
 *.pth
