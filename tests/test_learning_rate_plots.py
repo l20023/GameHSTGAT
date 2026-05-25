@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from src.learning_rate_plots import (
@@ -11,6 +12,7 @@ from src.learning_rate_plots import (
     learning_rate_plot_path,
     save_learning_rate_plot,
 )
+from src.training_pipeline import PRIOR_EPSILON_AT_T0, anchored_t0_decay_values
 
 
 def test_build_suptitle_shows_convergence_warning_instead_of_within_bound() -> None:
@@ -97,6 +99,18 @@ def test_save_learning_rate_plot_with_convergence_warning(tmp_path: Path) -> Non
     assert output_path.stat().st_size > 0
     assert output_path.exists()
     assert output_path.stat().st_size > 0
+
+
+def test_anchored_t0_curves_share_epsilon_at_t0_not_necessarily_at_t1() -> None:
+    epsilon_inf = 0.05
+    beta_gat = 0.3
+    beta_hst = 0.81
+    t = np.array([0.0, 1.0])
+    gat = anchored_t0_decay_values(t, beta=beta_gat, epsilon_inf=epsilon_inf)
+    hst = anchored_t0_decay_values(t, beta=beta_hst, epsilon_inf=epsilon_inf)
+    assert float(gat[0]) == pytest.approx(PRIOR_EPSILON_AT_T0)
+    assert float(hst[0]) == pytest.approx(PRIOR_EPSILON_AT_T0)
+    assert float(gat[1]) != pytest.approx(float(hst[1]))
 
 
 def test_learning_rate_plot_path_sanitizes_condition_key() -> None:

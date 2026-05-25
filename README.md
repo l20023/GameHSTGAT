@@ -206,14 +206,14 @@ Each metrics file stores beta fit, HST comparison, and `train_loss_final`. Full
 `train_loss_history` / `epsilon_series` arrays in JSON are omitted unless enabled in config.
 
 Learning-rate plots use the default **fit-anchor `t0`** (`__anchored_t0` filename suffix):
-- Fit model: `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf` for `t = 1..T` (prior `epsilon(0)=0.5` at round 0).
-- GAT and HST reference curves share fitted `epsilon_inf` and the same `t=0` prior anchor; HST uses `beta_HST_max` (max permitted slope, not a forecast).
-- Both curves are drawn over the **full** empirical series when plots are generated; the grey fit-window marker shows where beta was estimated.
-- **Log panel:** `epsilon(t) - epsilon_inf` with the same anchor for slope comparison.
+- Fit model: `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf` (prior `epsilon(0)=0.5` at round 0).
+- **Shared point (t0):** GAT and HST meet at **ε(0)=0.5** (visible at `t=0` on the plot). At **t=1** they usually differ (different β); the empirical point need not lie on the fit curve.
+- HST uses `beta_HST_max` (max permitted slope, not a forecast). The grey fit-window marker applies to measured rounds `t ≥ 1`.
+- **Log panel:** `ε(t)−ε∞` with slopes `∝ exp(−β·t)` from the same t0 base `(0.5−ε∞)`.
 
-**Fit-anchor `t1`** (sensitivity): empirical `epsilon(1)` at round 1,
-`epsilon(t) = (epsilon(1) - epsilon_inf) * exp(-beta * (t-1)) + epsilon_inf`. Select via
-`--fit-anchor t1` in `plot_learning_rate_from_logs.py`; output suffix is `__anchored_t1`.
+**Fit-anchor `t1`** (sensitivity / comparison): GAT and HST both pass through **empirical ε(1)** at `t=1`;
+`epsilon(t) = (epsilon(1) - epsilon_inf) * exp(-beta * (t-1)) + epsilon_inf`. Use
+`--fit-anchor t1` in `plot_learning_rate_from_logs.py` (suffix `__anchored_t1`).
 
 ### Re-plot learning-rate curves from saved logs
 

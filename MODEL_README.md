@@ -103,9 +103,10 @@ From trained models:
   - primary method: `scipy.optimize.curve_fit`
   - fallback: log-linear fit when scipy fit fails
 - generate `anchored_t0` learning-rate plots per condition (default **fit-anchor `t0`** for GAT fit and HST reference):
-  - GAT and HST curves use prior `epsilon(0)=0.5` and share fitted `epsilon_inf`
-  - HST reference decays with `beta_HST_max`; both curves span the full plotted horizon at save time
-  - optional **fit-anchor `t1`**: empirical `epsilon(1)` (`plot_learning_rate_from_logs.py --fit-anchor t1`, suffix `__anchored_t1`)
+  - shared anchor at **t=0**: both curves start at `epsilon(0)=0.5` (x-axis includes `t=0`)
+  - at **t=1**, GAT and HST values generally differ; empirical `epsilon(1)` is not forced onto the model curves
+  - HST reference uses `beta_HST_max` with the same `epsilon_inf` as the GAT fit
+  - optional **fit-anchor `t1`**: GAT and HST share empirical `epsilon(1)` at `t=1` (`plot_learning_rate_from_logs.py --fit-anchor t1`)
 
 Bound comparison:
 - `beta_HST_max(q)` follows HST Theorem 1 in `src/hst_bound.py`
