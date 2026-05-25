@@ -138,9 +138,8 @@ Reference:
 
 ### Single run
 
-`scripts/train.py` executes one seed / one node-count configuration across graph conditions and logs:
-- local JSON artifacts
-- W&B run metrics
+`scripts/train.py` executes one seed / one node-count configuration across graph conditions and writes:
+- local JSON artifacts (`metrics.json`, optional plots)
 
 ### Grid run
 
@@ -195,8 +194,6 @@ Current important defaults:
 - `train_episodes: 5000` (fallback; grid uses `train_episodes_per_n`: 10→5000, 100→7000, 1000→10000)
 - `max_horizon: 100`
 - `save_epsilon_series: true`
-- `wandb_project: game-theory-project`
-- `wandb_entity: GameHSTGAT`
 - `communication_mode: fair_1bit`
 
 Design choice:

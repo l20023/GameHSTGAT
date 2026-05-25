@@ -11,8 +11,6 @@ def test_resolve_run_config_yaml_and_cli_override(tmp_path) -> None:
             [
                 "seed: 11",
                 "num_nodes: 50",
-                "wandb_project: yaml-project",
-                "wandb_entity: yaml-entity",
                 "train_episodes: 123",
                 "communication_mode: vector",
                 "communication_dim: 4",
@@ -25,8 +23,6 @@ def test_resolve_run_config_yaml_and_cli_override(tmp_path) -> None:
         config=config_path,
         seed=3,
         num_nodes=None,
-        wandb_project=None,
-        wandb_entity=None,
         graph_cache_dir=None,
         artifacts_dir=None,
         train_episodes=999,
@@ -49,7 +45,6 @@ def test_resolve_run_config_yaml_and_cli_override(tmp_path) -> None:
     assert resolved["seed"] == 3  # CLI overrides YAML
     assert resolved["num_nodes"] == 50  # YAML overrides defaults
     assert resolved["train_episodes"] == 999  # CLI overrides YAML
-    assert resolved["wandb_entity"] == "yaml-entity"
     assert resolved["communication_mode"] == "vector"
     assert resolved["communication_dim"] == 4
     assert resolved["device"] == "auto"

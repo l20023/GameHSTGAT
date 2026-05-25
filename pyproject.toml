@@ -12,7 +12,6 @@ dependencies = [
     "networkx",
     "torch",
     "torch-geometric",
-    "wandb",
     "PyYAML",
 ]
 

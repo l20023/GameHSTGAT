@@ -6,9 +6,6 @@ RGAT-based social learning experiments to compare empirical learning dynamics ag
 
 1. Install dependencies:
    - `pip install -e .`
-2. Login to Weights & Biases:
-   - `wandb login`
-   - for local runs, the login token is used automatically
 
 ## Single Run (YAML-based)
 
@@ -17,8 +14,6 @@ The training script runs one configuration per invocation.
 - Base config file: `configs/default.yaml`
 - CLI overrides are supported and take precedence over YAML.
 - Default config highlights:
-  - `wandb_project: game-theory-project`
-  - `wandb_entity: GameHSTGAT`
   - `device: auto` (prefers CUDA, then MPS, then CPU)
   - `num_seeds: 5`
   - `train_episodes: 5000` (fallback; grid uses adaptive `train_episodes_per_n`: 10→5000, 100→7000, 1000→10000)
@@ -33,7 +28,6 @@ Example:
 This run automatically:
 - builds/loads proposal graph conditions (`complete`, `ws p=0.0`, `ws p=0.1`)
 - trains and evaluates one seed/node setup
-- logs to W&B (`wandb_entity` default: `GameHSTGAT`)
 - saves local metrics JSON under `artifacts_dir/seed_<seed>/metrics.json`
 
 ## Useful CLI Overrides
@@ -52,8 +46,6 @@ This run automatically:
 - `--device` (`auto`, `cpu`, `cuda`, `mps`)
 - `--graph-cache-dir`
 - `--artifacts-dir`
-- `--wandb-project`
-- `--wandb-entity`
 - `--disable-beta-fit`
 
 Device behavior:
@@ -210,8 +202,7 @@ Fairness protocol for HST comparison:
 - Metrics: `artifacts/training_metrics/seed_<seed>/metrics.json` (compact by default)
 - Plots: `artifacts/.../seed_<seed>/plots/<condition>__anchored_t1.png` and `<condition>__train_loss.png`
 
-Each metrics file stores beta fit, HST comparison, and `train_loss_final`. W&B logs the
-full per-episode training loss curve under `<condition>/train_loss`. Full
+Each metrics file stores beta fit, HST comparison, and `train_loss_final`. Full
 `train_loss_history` / `epsilon_series` arrays in JSON are omitted unless enabled in config.
 
 Learning-rate plots use the default **fit-anchor `t1`** (`__anchored_t1` filename suffix):

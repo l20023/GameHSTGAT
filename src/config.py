@@ -100,8 +100,6 @@ def build_grid_config_snapshot(
         "save_epsilon_series": bool(run_config["save_epsilon_series"]),
         "save_consensus_series": bool(run_config["save_consensus_series"]),
         "save_learning_rate_plots": bool(run_config["save_learning_rate_plots"]),
-        "wandb_project": str(run_config["wandb_project"]),
-        "wandb_entity": run_config["wandb_entity"],
         "graph_cache_dir": str(graph_cache_dir),
         "artifacts_root": str(artifacts_root),
     }

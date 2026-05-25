@@ -35,7 +35,7 @@ logs/
 *.ckpt
 *.log
 
-# W&B local run files
+# Legacy W&B local run files (optional cleanup)
 wandb/
 
 # Secrets / env files

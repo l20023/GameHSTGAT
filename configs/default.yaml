@@ -2,9 +2,6 @@ seed: 0
 num_seeds: 5
 num_nodes: 10
 
-wandb_project: game-theory-project
-wandb_entity: GameHSTGAT
-
 graph_cache_dir: artifacts/graphs
 artifacts_dir: artifacts/training_metrics
 

@@ -1,3 +1,7 @@
+"""Tests for the training entrypoint (local artifacts only)."""
+
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -5,18 +9,6 @@ import torch
 from torch_geometric.data import Data
 
 import scripts.train as train_script
-
-
-class _DummyRun:
-    def __init__(self) -> None:
-        self.logs: list[tuple[dict, int | None]] = []
-        self.finished = False
-
-    def log(self, payload: dict, step: int | None = None) -> None:
-        self.logs.append((payload, step))
-
-    def finish(self) -> None:
-        self.finished = True
 
 
 class _FakeGenerator:
@@ -45,20 +37,7 @@ def _make_graph(num_nodes: int) -> Data:
     return Data(edge_index=adjacency.nonzero(as_tuple=False).t().contiguous(), num_nodes=num_nodes)
 
 
-def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypatch) -> None:
-    dummy_run = _DummyRun()
-    captured: dict[str, object] = {}
-
-    def _fake_init_wandb_run(**kwargs):
-        captured["init_kwargs"] = kwargs
-        return dummy_run
-
-    monkeypatch.setattr(
-        train_script,
-        "init_wandb_run",
-        _fake_init_wandb_run,
-    )
-    monkeypatch.setattr(train_script, "finish_wandb_run", lambda run: run.finish())
+def test_run_single_seed_writes_local_artifacts(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         train_script,
         "run_condition_experiment",
@@ -118,8 +97,6 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
         num_nodes=10,
         graph_cache_dir=tmp_path / "graphs",
         artifacts_dir=tmp_path / "metrics",
-        wandb_project="unit-test-project",
-        wandb_entity=None,
         train_episodes=1,
         test_episodes=1,
         max_horizon=3,
@@ -144,24 +121,12 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
     assert fake_generator.ws_probs_seen == train_script.PROPOSAL_WS_PROBS
     assert summary["num_conditions"] == 3
     assert summary["mean_final_loss"] == 0.123
-    assert dummy_run.finished is True
-    summary_logs = [entry for entry in dummy_run.logs if entry[1] is None]
-    train_loss_logs = [entry for entry in dummy_run.logs if entry[1] is not None]
-    assert len(summary_logs) == 3
-    assert len(train_loss_logs) == 6
-    assert train_loss_logs[0][0]["n_10/complete/train_loss"] == 0.9
-    assert train_loss_logs[1][0]["n_10/complete/train_loss"] == 0.123
-
-    init_kwargs = captured["init_kwargs"]
-    assert isinstance(init_kwargs, dict)
-    assert init_kwargs["project"] == "unit-test-project"
-    assert init_kwargs["config"]["ws_probs"] == train_script.PROPOSAL_WS_PROBS
-    assert init_kwargs["config"]["communication_mode"] == "fair_1bit"
-    assert init_kwargs["config"]["communication_dim"] is None
 
     metrics_path = tmp_path / "metrics" / "seed_0" / "metrics.json"
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     assert metrics["seed"] == 0
+    assert metrics["signal_quality"] == 0.8
+    assert metrics["num_nodes"] == 10
     assert len(metrics["conditions"]) == 3
     complete_metrics = metrics["conditions"]["n_10/complete"]
     assert complete_metrics["learning_rate_plot"].endswith("__anchored_t1.png")

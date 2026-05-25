@@ -46,8 +46,6 @@ def run_grid_experiments(
     signal_quality_list: list[float],
     graph_cache_dir: Path,
     artifacts_root: Path,
-    wandb_project: str,
-    wandb_entity: str | None,
     train_episodes: int,
     test_episodes: int,
     max_horizon: int,
@@ -93,8 +91,6 @@ def run_grid_experiments(
             num_nodes=task.num_nodes,
             graph_cache_dir=graph_cache_dir,
             artifacts_dir=setting_artifacts_dir,
-            wandb_project=wandb_project,
-            wandb_entity=wandb_entity,
             train_episodes=effective_train_episodes,
             test_episodes=test_episodes,
             max_horizon=max_horizon,
@@ -157,8 +153,6 @@ def run_grid_experiments(
             "save_epsilon_series": save_epsilon_series,
             "save_consensus_series": save_consensus_series,
             "save_learning_rate_plots": save_learning_rate_plots,
-            "wandb_project": wandb_project,
-            "wandb_entity": wandb_entity,
         },
         seeds=seeds,
         num_nodes_list=num_nodes_list,
@@ -228,8 +222,6 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Root output directory for per-run metrics in grid mode.",
     )
-    parser.add_argument("--wandb-project", type=str, default=None)
-    parser.add_argument("--wandb-entity", type=str, default=None)
     parser.add_argument("--train-episodes", type=int, default=None)
     parser.add_argument("--test-episodes", type=int, default=None)
     parser.add_argument("--max-horizon", type=int, default=None)
@@ -266,8 +258,6 @@ def resolve_run_config(args: argparse.Namespace) -> dict[str, Any]:
     cli_overrides: dict[str, Any] = {
         "graph_cache_dir": str(args.graph_cache_dir) if args.graph_cache_dir is not None else None,
         "artifacts_dir": str(args.artifacts_dir) if args.artifacts_dir is not None else None,
-        "wandb_project": args.wandb_project,
-        "wandb_entity": args.wandb_entity,
         "train_episodes": args.train_episodes,
         "test_episodes": args.test_episodes,
         "max_horizon": args.max_horizon,
@@ -320,10 +310,6 @@ def main() -> None:
         signal_quality_list=signal_quality_list,
         graph_cache_dir=graph_cache_dir,
         artifacts_root=artifacts_root,
-        wandb_project=str(run_config["wandb_project"]),
-        wandb_entity=(
-            None if run_config["wandb_entity"] is None else str(run_config["wandb_entity"])
-        ),
         train_episodes=int(run_config["train_episodes"]),
         test_episodes=int(run_config["test_episodes"]),
         max_horizon=int(run_config["max_horizon"]),

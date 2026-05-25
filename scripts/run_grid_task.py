@@ -28,8 +28,6 @@ def resolve_grid_context(args: argparse.Namespace) -> dict[str, Any]:
     yaml_payload = load_yaml_config(args.config)
     cli_overrides: dict[str, Any] = {
         "graph_cache_dir": str(args.graph_cache_dir) if args.graph_cache_dir is not None else None,
-        "wandb_project": args.wandb_project,
-        "wandb_entity": args.wandb_entity,
         "train_episodes": args.train_episodes,
         "test_episodes": args.test_episodes,
         "max_horizon": args.max_horizon,
@@ -112,10 +110,6 @@ def run_grid_task(
         num_nodes=task.num_nodes,
         graph_cache_dir=graph_cache_dir,
         artifacts_dir=setting_artifacts_dir,
-        wandb_project=str(run_config["wandb_project"]),
-        wandb_entity=(
-            None if run_config["wandb_entity"] is None else str(run_config["wandb_entity"])
-        ),
         train_episodes=effective_train_episodes,
         test_episodes=int(run_config["test_episodes"]),
         max_horizon=int(run_config["max_horizon"]),
@@ -193,8 +187,6 @@ def parse_args() -> argparse.Namespace:
         help="Root directory for grid run artifacts.",
     )
     parser.add_argument("--graph-cache-dir", type=Path, default=None)
-    parser.add_argument("--wandb-project", type=str, default=None)
-    parser.add_argument("--wandb-entity", type=str, default=None)
     parser.add_argument("--train-episodes", type=int, default=None)
     parser.add_argument("--test-episodes", type=int, default=None)
     parser.add_argument("--max-horizon", type=int, default=None)

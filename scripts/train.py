@@ -19,7 +19,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.graph_generator import GraphGenerator
 from src.config import load_yaml_config, merge_flat_config
 from src.grid_tasks import parse_train_episodes_per_n, resolve_train_episodes
-from src.logging_utils import finish_wandb_run, init_wandb_run, log_condition_metrics
 from src.learning_rate_plots import learning_rate_plot_path, save_learning_rate_plot
 from src.train_loss_plots import save_train_loss_plot, train_loss_plot_path
 from src.training_pipeline import (
@@ -34,8 +33,6 @@ DEFAULT_CONFIG_PATH = Path("configs/default.yaml")
 DEFAULT_RUN_CONFIG: dict[str, Any] = {
     "seed": 0,
     "num_nodes": 10,
-    "wandb_project": "game-theory-project",
-    "wandb_entity": "GameHSTGAT",
     "graph_cache_dir": "artifacts/graphs",
     "artifacts_dir": "artifacts/training_metrics",
     "train_episodes": 5000,
@@ -77,8 +74,6 @@ def run_single_seed(
     num_nodes: int,
     graph_cache_dir: Path,
     artifacts_dir: Path,
-    wandb_project: str,
-    wandb_entity: str | None,
     train_episodes: int,
     test_episodes: int,
     max_horizon: int,
@@ -108,120 +103,77 @@ def run_single_seed(
         ws_probs=PROPOSAL_WS_PROBS,
         seed=seed,
     )
-    run_config = {
-        "seed": seed,
-        "num_nodes": num_nodes,
-        "ws_probs": PROPOSAL_WS_PROBS,
-        "train_episodes": train_episodes,
-        "test_episodes": test_episodes,
-        "max_horizon": max_horizon,
-        "signal_quality": signal_quality,
-        "hidden_dim": hidden_dim,
-        "num_heads": num_heads,
-        "communication_mode": communication_mode,
-        "communication_dim": communication_dim,
-        "learning_rate": learning_rate,
-        "weight_decay": weight_decay,
-        "dropout": dropout,
-        "validation_episodes": validation_episodes,
-        "validation_eval_every": validation_eval_every,
-        "device": str(resolved_device),
-        "disable_beta_fit": disable_beta_fit,
-        "save_train_loss_history": save_train_loss_history,
-        "save_epsilon_series": save_epsilon_series,
-        "save_consensus_series": save_consensus_series,
-        "save_learning_rate_plots": save_learning_rate_plots,
-    }
-    wandb_run = init_wandb_run(
-        project=wandb_project,
-        entity=wandb_entity,
-        seed=seed,
-        config=run_config,
-    )
-
     per_condition_metrics: dict[str, dict] = {}
-    try:
-        condition_index = 0
-        for num_nodes, conditions in graphs.items():
-            for condition_name, graph_data in conditions.items():
-                key = f"n_{num_nodes}/{condition_name}"
-                result = run_condition_experiment(
-                    graph_data=graph_data,
-                    train_episodes=train_episodes,
-                    test_episodes=test_episodes,
-                    max_horizon=max_horizon,
-                    signal_quality=signal_quality,
-                    hidden_dim=hidden_dim,
-                    num_heads=num_heads,
-                    communication_mode=communication_mode,
-                    communication_dim=communication_dim,
-                    learning_rate=learning_rate,
-                    weight_decay=weight_decay,
-                    dropout=dropout,
-                    validation_episodes=validation_episodes,
-                    validation_eval_every=validation_eval_every,
+    for num_nodes, conditions in graphs.items():
+        for condition_name, graph_data in conditions.items():
+            key = f"n_{num_nodes}/{condition_name}"
+            result = run_condition_experiment(
+                graph_data=graph_data,
+                train_episodes=train_episodes,
+                test_episodes=test_episodes,
+                max_horizon=max_horizon,
+                signal_quality=signal_quality,
+                hidden_dim=hidden_dim,
+                num_heads=num_heads,
+                communication_mode=communication_mode,
+                communication_dim=communication_dim,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                dropout=dropout,
+                validation_episodes=validation_episodes,
+                validation_eval_every=validation_eval_every,
+                seed=seed,
+                device=resolved_device,
+                disable_beta_fit=disable_beta_fit,
+                include_consensus_series=save_consensus_series,
+            )
+            condition_metrics = condition_result_to_dict(
+                result,
+                save_train_loss_history=save_train_loss_history,
+                save_epsilon_series=save_epsilon_series,
+                save_consensus_series=save_consensus_series,
+            )
+            if save_learning_rate_plots:
+                anchored_t1_plot_path = learning_rate_plot_path(
+                    artifacts_dir=artifacts_dir,
                     seed=seed,
-                    device=resolved_device,
-                    disable_beta_fit=disable_beta_fit,
-                    include_consensus_series=save_consensus_series,
-                )
-                condition_metrics = condition_result_to_dict(
-                    result,
-                    save_train_loss_history=save_train_loss_history,
-                    save_epsilon_series=save_epsilon_series,
-                    save_consensus_series=save_consensus_series,
-                )
-                if save_learning_rate_plots:
-                    anchored_t1_plot_path = learning_rate_plot_path(
-                        artifacts_dir=artifacts_dir,
-                        seed=seed,
-                        condition_key=key,
-                        plot_variant="anchored_t1",
-                    )
-                    save_learning_rate_plot(
-                        output_path=anchored_t1_plot_path,
-                        epsilon_series=result.epsilon_series,
-                        beta_fit=result.beta_fit,
-                        beta_hst_max=result.beta_hst_max,
-                        condition_key=key,
-                        signal_quality=signal_quality,
-                        beta_gap=result.beta_gap,
-                        exceeds_hst_bound=result.exceeds_hst_bound,
-                        convergence_warning=result.convergence_warning,
-                        plot_variant="anchored_t1",
-                    )
-                    condition_metrics["learning_rate_plot"] = str(anchored_t1_plot_path)
-                    condition_metrics["learning_rate_plot_anchored_t1"] = str(anchored_t1_plot_path)
-                    train_loss_path = train_loss_plot_path(
-                        artifacts_dir=artifacts_dir,
-                        seed=seed,
-                        condition_key=key,
-                    )
-                    save_train_loss_plot(
-                        output_path=train_loss_path,
-                        train_loss_history=result.train_loss_history,
-                        condition_key=key,
-                    )
-                    condition_metrics["train_loss_plot"] = str(train_loss_path)
-                per_condition_metrics[key] = condition_metrics
-                log_condition_metrics(
-                    run=wandb_run,
                     condition_key=key,
-                    condition_index=condition_index,
-                    metrics=condition_metrics,
-                    train_loss_history=result.train_loss_history,
+                    plot_variant="anchored_t1",
                 )
-                condition_index += 1
+                save_learning_rate_plot(
+                    output_path=anchored_t1_plot_path,
+                    epsilon_series=result.epsilon_series,
+                    beta_fit=result.beta_fit,
+                    beta_hst_max=result.beta_hst_max,
+                    condition_key=key,
+                    signal_quality=signal_quality,
+                    beta_gap=result.beta_gap,
+                    exceeds_hst_bound=result.exceeds_hst_bound,
+                    convergence_warning=result.convergence_warning,
+                    plot_variant="anchored_t1",
+                )
+                condition_metrics["learning_rate_plot"] = str(anchored_t1_plot_path)
+                condition_metrics["learning_rate_plot_anchored_t1"] = str(anchored_t1_plot_path)
+                train_loss_path = train_loss_plot_path(
+                    artifacts_dir=artifacts_dir,
+                    seed=seed,
+                    condition_key=key,
+                )
+                save_train_loss_plot(
+                    output_path=train_loss_path,
+                    train_loss_history=result.train_loss_history,
+                    condition_key=key,
+                )
+                condition_metrics["train_loss_plot"] = str(train_loss_path)
+            per_condition_metrics[key] = condition_metrics
 
-        save_seed_metrics(
-            artifacts_dir=artifacts_dir,
-            seed=seed,
-            metrics=per_condition_metrics,
-            signal_quality=signal_quality,
-            num_nodes=num_nodes,
-        )
-    finally:
-        finish_wandb_run(wandb_run)
+    save_seed_metrics(
+        artifacts_dir=artifacts_dir,
+        seed=seed,
+        metrics=per_condition_metrics,
+        signal_quality=signal_quality,
+        num_nodes=num_nodes,
+    )
 
     return {
         "seed": seed,
@@ -280,18 +232,6 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="One node count value for this run.",
-    )
-    parser.add_argument(
-        "--wandb-project",
-        type=str,
-        default=None,
-        help="Weights & Biases project name.",
-    )
-    parser.add_argument(
-        "--wandb-entity",
-        type=str,
-        default=None,
-        help="Weights & Biases entity/team (optional).",
     )
     parser.add_argument(
         "--graph-cache-dir",
@@ -425,8 +365,6 @@ def resolve_run_config(args: argparse.Namespace) -> dict[str, Any]:
     cli_overrides: dict[str, Any] = {
         "seed": args.seed,
         "num_nodes": args.num_nodes,
-        "wandb_project": args.wandb_project,
-        "wandb_entity": args.wandb_entity,
         "graph_cache_dir": str(args.graph_cache_dir) if args.graph_cache_dir is not None else None,
         "artifacts_dir": str(args.artifacts_dir) if args.artifacts_dir is not None else None,
         "train_episodes": args.train_episodes,
@@ -486,8 +424,6 @@ def main() -> None:
         num_nodes=num_nodes,
         graph_cache_dir=graph_cache_dir,
         artifacts_dir=artifacts_dir,
-        wandb_project=str(run_config["wandb_project"]),
-        wandb_entity=(None if run_config["wandb_entity"] is None else str(run_config["wandb_entity"])),
         train_episodes=effective_train_episodes,
         test_episodes=int(run_config["test_episodes"]),
         max_horizon=int(run_config["max_horizon"]),
