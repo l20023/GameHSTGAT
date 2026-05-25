@@ -7,10 +7,13 @@ from pathlib import Path
 import pytest
 
 from src.grid_tasks import (
+    PROPOSAL_GRID_SIGNAL_QUALITIES,
     build_grid_tasks,
     format_signal_quality_key,
     format_signal_quality_label,
     parse_train_episodes_per_n,
+    resolve_grid_signal_quality_list,
+    resolve_max_horizon,
     resolve_train_episodes,
     task_artifacts_dir,
 )
@@ -18,6 +21,7 @@ from src.grid_tasks import (
 
 def test_format_signal_quality_key_distinguishes_055_and_06() -> None:
     assert format_signal_quality_key(0.55) == "0p55"
+    assert format_signal_quality_key(0.65) == "0p65"
     assert format_signal_quality_key(0.6) == "0p6"
     assert format_signal_quality_key(0.8) == "0p8"
 
@@ -27,15 +31,15 @@ def test_format_signal_quality_label() -> None:
     assert format_signal_quality_label(0.6) == "0.6"
 
 
-def test_build_grid_tasks_default_grid_has_sixty_tasks() -> None:
+def test_build_grid_tasks_default_grid_has_forty_five_tasks() -> None:
     tasks = build_grid_tasks(
         seeds=[0, 1, 2, 3, 4],
         num_nodes_list=[10, 100, 1000],
-        signal_quality_list=[0.55, 0.6, 0.7, 0.8],
+        signal_quality_list=list(PROPOSAL_GRID_SIGNAL_QUALITIES),
     )
-    assert len(tasks) == 60
+    assert len(tasks) == 45
     assert tasks[0].task_index == 0
-    assert tasks[-1].task_index == 59
+    assert tasks[-1].task_index == 44
 
 
 def test_build_grid_tasks_order_is_q_then_n_then_seed() -> None:
@@ -89,6 +93,23 @@ def test_resolve_train_episodes_uses_per_n_mapping() -> None:
         train_episodes_per_n=mapping,
         train_episodes_default=999,
     ) == 999
+
+
+def test_resolve_max_horizon_policy() -> None:
+    assert (
+        resolve_max_horizon(signal_quality=0.55, topology_name="ws_p_0.1_seed_0")
+        == 100
+    )
+    assert resolve_max_horizon(signal_quality=0.55, topology_name="complete") == 50
+    assert resolve_max_horizon(signal_quality=0.65, topology_name="ws_p_0.0_seed_1") == 50
+    assert resolve_max_horizon(signal_quality=0.8, topology_name="complete") == 50
+
+
+def test_resolve_grid_signal_quality_list_from_yaml() -> None:
+    qualities = resolve_grid_signal_quality_list(
+        run_config={"grid_signal_quality_list": [0.55, 0.65, 0.8]}
+    )
+    assert qualities == [0.55, 0.65, 0.8]
 
 
 def test_parse_train_episodes_per_n_rejects_invalid_payload() -> None:

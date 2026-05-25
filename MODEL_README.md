@@ -159,7 +159,7 @@ It writes:
 
 ### SLURM grid (cluster)
 
-- `bash scripts/slurm/run_batch_slurms.sh 20 fair_1bit` submits 60 tasks (5 seeds × 3 n × 4 q) with throttling
+- `bash scripts/slurm/run_batch_slurms.sh 20 fair_1bit` submits 45 tasks (5 seeds × 3 n × 3 q) with throttling
 - each task runs `scripts/run_grid_task.py --task-index ...`
 - `scripts/slurm/finalize_job.sh` aggregates artifacts after the array completes
 - walltime is per network size (one array submit per n): 2h / 4h / 8h for n=10/100/1000 — override via `SBATCH_TIME_N10`, `SBATCH_TIME_N100`, `SBATCH_TIME_N1000`
@@ -193,7 +193,8 @@ Config is merged in this order:
 Current important defaults:
 - `num_seeds: 5` (seeds `0..4` in grid runs)
 - `train_episodes: 5000` (fallback; grid uses `train_episodes_per_n`: 10→5000, 100→7000, 1000→10000)
-- `max_horizon: 100`
+- `max_horizon: 50` (100 only for q=0.55 on ws topologies, per condition in `run_single_seed`)
+- `grid_signal_quality_list: [0.55, 0.65, 0.8]`
 - `save_epsilon_series: true`
 - `communication_mode: fair_1bit`
 

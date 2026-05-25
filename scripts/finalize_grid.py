@@ -21,7 +21,12 @@ from src.config import (
     resolve_replication_seeds,
 )
 from src.grid_summary import build_grid_summary, collect_records_from_artifacts
-from src.grid_tasks import parse_csv_floats, parse_csv_ints, parse_train_episodes_per_n
+from src.grid_tasks import (
+    parse_csv_ints,
+    parse_train_episodes_per_n,
+    proposal_grid_signal_quality_csv,
+    resolve_grid_signal_quality_list,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -85,7 +90,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--signal-quality-list",
         type=str,
-        default="0.55,0.6,0.7,0.8",
+        default=proposal_grid_signal_quality_csv(),
         help="Comma-separated signal qualities used in the grid.",
     )
     parser.add_argument(
@@ -113,7 +118,10 @@ def main() -> None:
     run_config = resolve_run_config(args)
     seeds = resolve_replication_seeds(cli_seeds=args.seeds, run_config=run_config)
     num_nodes_list = parse_csv_ints(args.num_nodes_list)
-    signal_quality_list = parse_csv_floats(args.signal_quality_list)
+    signal_quality_list = resolve_grid_signal_quality_list(
+        cli_value=args.signal_quality_list,
+        run_config=run_config,
+    )
     train_episodes_per_n = parse_train_episodes_per_n(run_config.get("train_episodes_per_n"))
 
     artifacts_root = args.artifacts_root

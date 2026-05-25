@@ -18,7 +18,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.graph_generator import GraphGenerator
 from src.config import load_yaml_config, merge_flat_config
-from src.grid_tasks import parse_train_episodes_per_n, resolve_train_episodes
+from src.grid_tasks import (
+    parse_train_episodes_per_n,
+    resolve_max_horizon,
+    resolve_train_episodes,
+)
 from src.learning_rate_plots import learning_rate_plot_path, save_learning_rate_plot
 from src.train_loss_plots import save_train_loss_plot, train_loss_plot_path
 from src.training_pipeline import (
@@ -38,7 +42,7 @@ DEFAULT_RUN_CONFIG: dict[str, Any] = {
     "train_episodes": 5000,
     "train_episodes_per_n": None,
     "test_episodes": 1000,
-    "max_horizon": 100,
+    "max_horizon": 50,
     "signal_quality": 0.8,
     "learning_rate": 0.001,
     "weight_decay": 1e-4,
@@ -107,11 +111,16 @@ def run_single_seed(
     for num_nodes, conditions in graphs.items():
         for condition_name, graph_data in conditions.items():
             key = f"n_{num_nodes}/{condition_name}"
+            condition_max_horizon = resolve_max_horizon(
+                signal_quality=signal_quality,
+                topology_name=condition_name,
+                base_horizon=max_horizon,
+            )
             result = run_condition_experiment(
                 graph_data=graph_data,
                 train_episodes=train_episodes,
                 test_episodes=test_episodes,
-                max_horizon=max_horizon,
+                max_horizon=condition_max_horizon,
                 signal_quality=signal_quality,
                 hidden_dim=hidden_dim,
                 num_heads=num_heads,

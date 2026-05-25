@@ -23,9 +23,10 @@ from src.graph_generator import GraphGenerator
 from src.grid_summary import build_grid_summary, metrics_to_record
 from src.grid_tasks import (
     build_grid_tasks,
-    parse_csv_floats,
     parse_csv_ints,
     parse_train_episodes_per_n,
+    proposal_grid_signal_quality_csv,
+    resolve_grid_signal_quality_list,
     resolve_train_episodes,
     task_artifacts_dir,
 )
@@ -201,8 +202,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--signal-quality-list",
         type=str,
-        default="0.55,0.6,0.7,0.8",
-        help="Comma-separated signal qualities, e.g. '0.55,0.6,0.7,0.8'.",
+        default=proposal_grid_signal_quality_csv(),
+        help="Comma-separated signal qualities, e.g. '0.55,0.65,0.8'.",
     )
     parser.add_argument(
         "--output",
@@ -297,7 +298,10 @@ def main() -> None:
     seeds = resolve_replication_seeds(cli_seeds=args.seeds, run_config=run_config)
     print(f"Running {len(seeds)} replication seeds: {seeds}")
     num_nodes_list = parse_csv_ints(args.num_nodes_list)
-    signal_quality_list = parse_csv_floats(args.signal_quality_list)
+    signal_quality_list = resolve_grid_signal_quality_list(
+        cli_value=args.signal_quality_list,
+        run_config=run_config,
+    )
 
     graph_cache_dir = Path(str(run_config["graph_cache_dir"]))
     base_artifacts_dir = Path(str(run_config["artifacts_dir"]))

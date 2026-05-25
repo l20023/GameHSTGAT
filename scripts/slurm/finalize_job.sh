@@ -32,7 +32,7 @@ cmd=(
   --aggregate-csv "${METRICS_AGG_CSV:-artifacts/metrics_summary_fair_aggregated.csv}"
   --communication-mode "${COMMUNICATION_MODE:-fair_1bit}"
   --num-nodes-list "${NUM_NODES_LIST:-10,100,1000}"
-  --signal-quality-list "${SIGNAL_QUALITY_LIST:-0.55,0.6,0.7,0.8}"
+  --signal-quality-list "${SIGNAL_QUALITY_LIST:-0.55,0.65,0.8}"
 )
 
 if [[ -n "${SEEDS:-}" ]]; then

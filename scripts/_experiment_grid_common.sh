@@ -17,10 +17,10 @@ run_proposal_grid_experiment() {
     --artifacts-dir "$artifacts_dir"
     --output "$summary_json"
     --num-nodes-list "${NUM_NODES_LIST:-10,100,1000}"
-    --signal-quality-list "${SIGNAL_QUALITY_LIST:-0.55,0.6,0.7,0.8}"
+    --signal-quality-list "${SIGNAL_QUALITY_LIST:-0.55,0.65,0.8}"
     --train-episodes "${TRAIN_EPISODES:-5000}"
     --test-episodes "${TEST_EPISODES:-1000}"
-    --max-horizon "${MAX_HORIZON:-100}"
+    --max-horizon "${MAX_HORIZON:-50}"
   )
 
   if [[ "$communication_mode" == "vector" ]]; then

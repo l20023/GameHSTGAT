@@ -11,7 +11,8 @@ train_episodes_per_n:  # adaptive: more episodes for larger networks / weaker q
   100: 7000
   1000: 10000
 test_episodes: 1000
-max_horizon: 100
+max_horizon: 50  # default T; q=0.55 on non-complete topologies uses 100 in run_single_seed
+grid_signal_quality_list: [0.55, 0.65, 0.8]
 signal_quality: 0.8
 
 learning_rate: 0.001

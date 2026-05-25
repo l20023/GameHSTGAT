@@ -17,9 +17,9 @@ The training script runs one configuration per invocation.
   - `device: auto` (prefers CUDA, then MPS, then CPU)
   - `num_seeds: 5`
   - `train_episodes: 5000` (fallback; grid uses adaptive `train_episodes_per_n`: 10→5000, 100→7000, 1000→10000)
-  - `max_horizon: 100`
+  - `max_horizon: 50` (100 only for q=0.55 on ws, per condition)
   - `communication_mode: fair_1bit` (default fair HST benchmark)
-  - grid defaults: `num_nodes_list=10,100,1000`, `signal_quality_list=0.55,0.6,0.7,0.8`
+  - grid defaults: `num_nodes_list=10,100,1000`, `signal_quality_list=0.55,0.65,0.8`
 
 Example:
 
@@ -93,7 +93,7 @@ bash scripts/run_experiment_fair.sh
 bash scripts/run_experiment_vector.sh
 ```
 
-Each script runs the full matrix (`n={10,100,1000}`, `q={0.55,0.6,0.7,0.8}`, **5 seeds** `0..4`, `T=100` from config),
+Each script runs the full matrix (`n={10,100,1000}`, `q={0.55,0.65,0.8}`, **5 seeds** `0..4`). Horizon: **T=50** by default; **T=100** only for **q=0.55** on **non-complete** topologies (ws).
 writes a grid summary JSON, builds per-run + seed-aggregated CSV tables, and emits aggregate plots
 (beta_GAT vs q and beta_GAT vs n with error bars and HST reference lines).
 
@@ -321,5 +321,5 @@ For a full technical walkthrough of the model and design decisions, see `MODEL_R
 
 ## Proposal vs implementation defaults
 
-- The implementation currently uses `max_horizon: 100`, adaptive `train_episodes_per_n` (5000/7000/10000 for n=10/100/1000), and `test_episodes: 1000`.
+- Grid runs use adaptive `train_episodes_per_n` (5000/7000/10000 for n=10/100/1000), `test_episodes: 1000`, and the horizon policy above (`max_horizon: 50` in config).
 - Older proposal text and early artifacts may reference `T_max=50` and larger training budgets; treat those as historical planning values.

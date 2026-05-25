@@ -39,7 +39,7 @@ cmd=(
   --communication-mode "${COMMUNICATION_MODE:-fair_1bit}"
   --artifacts-root "${ARTIFACTS_ROOT:-artifacts/training_metrics_fair/grid_runs}"
   --num-nodes-list "${NUM_NODES_LIST:-10,100,1000}"
-  --signal-quality-list "${SIGNAL_QUALITY_LIST:-0.55,0.6,0.7,0.8}"
+  --signal-quality-list "${SIGNAL_QUALITY_LIST:-0.55,0.65,0.8}"
 )
 
 if [[ -n "${SEEDS:-}" ]]; then

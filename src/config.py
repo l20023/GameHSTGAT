@@ -85,6 +85,12 @@ def build_grid_config_snapshot(
         "train_episodes_per_n": train_episodes_per_n,
         "test_episodes": int(run_config["test_episodes"]),
         "max_horizon": int(run_config["max_horizon"]),
+        "max_horizon_policy": {
+            "base": int(run_config["max_horizon"]),
+            "extended": 100,
+            "extended_q": 0.55,
+            "rule": "T=100 for q=0.55 on non-complete topologies; else T=base",
+        },
         "hidden_dim": int(run_config["hidden_dim"]),
         "num_heads": int(run_config["num_heads"]),
         "communication_mode": communication_mode,
