@@ -41,14 +41,20 @@ run_proposal_grid_experiment() {
   local grid_root="${artifacts_dir}/grid_runs"
   echo ""
   echo "Summarizing metrics under ${grid_root} ..."
+  metrics_agg_json="${metrics_agg_csv%.csv}.json"
+  metrics_agg_plots="${grid_root}/aggregate_plots"
   python scripts/summarize_metrics.py \
     --root "$grid_root" \
     --csv "$metrics_csv" \
-    --aggregate-csv "$metrics_agg_csv"
+    --aggregate-csv "$metrics_agg_csv" \
+    --aggregate-json "$metrics_agg_json" \
+    --aggregate-plots-dir "$metrics_agg_plots"
 
   echo ""
   echo "Done."
   echo "  Grid summary:     ${summary_json}"
   echo "  Per-run table:    ${metrics_csv}"
   echo "  Aggregated table: ${metrics_agg_csv}"
+  echo "  Aggregate JSON:   ${metrics_agg_json}"
+  echo "  Aggregate plots:  ${metrics_agg_plots}/"
 }

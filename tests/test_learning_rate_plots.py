@@ -23,6 +23,7 @@ def test_build_suptitle_shows_convergence_warning_instead_of_within_bound() -> N
         epsilon_inf=0.08,
         fit_success=True,
         convergence_warning_threshold=0.05,
+        fit_anchor="t1",
     )
     assert "convergence warning" in title
     assert "bound comparison suppressed" in title
@@ -39,12 +40,13 @@ def test_build_suptitle_shows_fit_failed() -> None:
         epsilon_inf=None,
         fit_success=False,
         convergence_warning_threshold=0.05,
+        fit_anchor="t1",
     )
     assert "fit failed" in title
     assert "bound comparison n/a" in title
 
 
-@pytest.mark.parametrize("plot_variant", ["anchored_t0"])
+@pytest.mark.parametrize("plot_variant", ["anchored_t1", "anchored_t0"])
 def test_save_learning_rate_plot_writes_png(tmp_path: Path, plot_variant: str) -> None:
     epsilon_series = [0.4, 0.25, 0.15, 0.1, 0.08]
     beta_fit = {
@@ -52,7 +54,7 @@ def test_save_learning_rate_plot_writes_png(tmp_path: Path, plot_variant: str) -
         "beta": 0.3,
         "epsilon_inf": 0.05,
         "fit_success": True,
-        "method": "scipy_anchored_t0",
+        "method": "scipy_anchored_t1",
     }
     output_path = tmp_path / f"plot_{plot_variant}.png"
     save_learning_rate_plot(
@@ -79,7 +81,7 @@ def test_save_learning_rate_plot_with_convergence_warning(tmp_path: Path) -> Non
             "beta": 0.3,
             "epsilon_inf": 0.08,
             "fit_success": True,
-            "method": "scipy_anchored_t0",
+            "method": "scipy_anchored_t1",
         },
         beta_hst_max=0.81,
         condition_key="n_10/complete",
@@ -95,12 +97,12 @@ def test_save_learning_rate_plot_with_convergence_warning(tmp_path: Path) -> Non
 
 
 def test_learning_rate_plot_path_sanitizes_condition_key() -> None:
-    anchored_t0_path = learning_rate_plot_path(
+    anchored_t1_path = learning_rate_plot_path(
         artifacts_dir=Path("artifacts/fair"),
         seed=2,
         condition_key="n_10/ws_p_0.1_seed_2",
-        plot_variant="anchored_t0",
+        plot_variant="anchored_t1",
     )
-    assert anchored_t0_path == Path(
-        "artifacts/fair/seed_2/plots/n_10__ws_p_0.1_seed_2__anchored_t0.png"
+    assert anchored_t1_path == Path(
+        "artifacts/fair/seed_2/plots/n_10__ws_p_0.1_seed_2__anchored_t1.png"
     )

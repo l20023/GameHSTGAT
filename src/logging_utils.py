@@ -127,12 +127,25 @@ def log_condition_metrics(
         except Exception:
             pass
 
-    anchored_plot = metrics.get("learning_rate_plot_anchored_t0")
-    if isinstance(anchored_plot, str) and Path(anchored_plot).is_file():
+    anchored_t1_plot = metrics.get("learning_rate_plot_anchored_t1")
+    if isinstance(anchored_t1_plot, str) and Path(anchored_t1_plot).is_file():
         try:
             import wandb  # type: ignore
 
-            payload[f"{condition_key}/learning_rate_plot_anchored_t0"] = wandb.Image(anchored_plot)
+            payload[f"{condition_key}/learning_rate_plot_anchored_t1"] = wandb.Image(
+                anchored_t1_plot
+            )
+        except Exception:
+            pass
+
+    anchored_t0_plot = metrics.get("learning_rate_plot_anchored_t0")
+    if isinstance(anchored_t0_plot, str) and Path(anchored_t0_plot).is_file():
+        try:
+            import wandb  # type: ignore
+
+            payload[f"{condition_key}/learning_rate_plot_anchored_t0"] = wandb.Image(
+                anchored_t0_plot
+            )
         except Exception:
             pass
 

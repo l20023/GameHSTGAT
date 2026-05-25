@@ -208,17 +208,21 @@ Fairness protocol for HST comparison:
 
 - Graph cache: `artifacts/graphs`
 - Metrics: `artifacts/training_metrics/seed_<seed>/metrics.json` (compact by default)
-- Plots: `artifacts/.../seed_<seed>/plots/<condition>__anchored_t0.png` and `<condition>__train_loss.png`
+- Plots: `artifacts/.../seed_<seed>/plots/<condition>__anchored_t1.png` and `<condition>__train_loss.png`
 
 Each metrics file stores beta fit, HST comparison, and `train_loss_final`. W&B logs the
 full per-episode training loss curve under `<condition>/train_loss`. Full
 `train_loss_history` / `epsilon_series` arrays in JSON are omitted unless enabled in config.
 
-Learning-rate plots are emitted in anchored form:
-- `__anchored_t0`: both GAT and HST reference curves use the same fitted `epsilon_inf` and are anchored at `epsilon(0)=0.5`.
-- fit model: `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf`.
-- **Linear panel:** GAT and HST curves use that anchored model (HST with `beta_HST_max`, not a predicted `epsilon(t)` trajectory).
-- **Log panel:** empirical `epsilon(t) - epsilon_inf` vs `t`; GAT/HST dashed lines share the same excess-error level at `t=1` and slope `-beta` (steepness comparison only).
+Learning-rate plots use the default **fit-anchor `t1`** (`__anchored_t1` filename suffix):
+- Fit model: `epsilon(t) = (epsilon(1) - epsilon_inf) * exp(-beta * (t-1)) + epsilon_inf` for `t = 1..T`.
+- `epsilon(1)` is the **empirical** test error at round 1 (agents already use private signals); the curve passes through that point exactly.
+- GAT and HST reference curves share fitted `epsilon_inf` and the same `epsilon(1)`; HST uses `beta_HST_max` (max permitted slope, not a forecast).
+- **Log panel:** `epsilon(t) - epsilon_inf` with the same `t=1` anchor for slope comparison.
+
+**Fit-anchor `t0`** (sensitivity only, not the pipeline default): prior `epsilon(0)=0.5` at round 0,
+`epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf`. Select via
+`--fit-anchor t0` in `plot_learning_rate_from_logs.py`; output suffix is `__anchored_t0`.
 
 ### Re-plot learning-rate curves from saved logs
 
@@ -234,13 +238,23 @@ python scripts/plot_learning_rate_from_logs.py \
   --list-conditions
 ```
 
-Auto-fit (truncates only a trailing suffix with perfect error rate `epsilon=0`):
+Auto-fit with default anchor `t1` (truncates only a trailing suffix with perfect error rate `epsilon=0`):
 
 ```bash
 python scripts/plot_learning_rate_from_logs.py \
   --metrics artifacts/_smoke/seed_1/metrics.json \
   --condition n_10/complete \
   --signal-quality 0.6
+```
+
+Prior anchor `t0` (uninformed prior at round 0):
+
+```bash
+python scripts/plot_learning_rate_from_logs.py \
+  --metrics artifacts/_smoke/seed_1/metrics.json \
+  --condition n_10/complete \
+  --signal-quality 0.6 \
+  --fit-anchor t0
 ```
 
 Manual fit window — last round **included** in the beta fit (`1`-based, inclusive):
@@ -265,11 +279,12 @@ python scripts/plot_learning_rate_from_logs.py \
 ```
 
 Without `--output`, a manual `--fit-window-t-max` writes
-`<artifacts>/seed_<S>/plots/<condition>__anchored_t0__tmax_<T>.png` so original plots are not overwritten.
+`<artifacts>/seed_<S>/plots/<condition>__anchored_t1__tmax_<T>.png` (or `__anchored_t0__` with `--fit-anchor t0`)
+so original plots are not overwritten.
 
 Reading order for plots:
-1. Aggregate plots in `<artifacts_dir>/grid_runs/aggregate_plots/` give the headline view (beta vs q, beta vs n with HST reference).
-2. Per-condition `__anchored_t0` plots show the empirical decay vs both fits for a single seed/setting (use only for diagnostics).
+1. Aggregate plots in `<artifacts_dir>/grid_runs/aggregate_plots/` (or `aggregate/plots/` after replication) give the headline view (beta vs q, beta vs n with HST reference).
+2. Per-condition `__anchored_t1` plots show the empirical decay vs both fits for a single seed/setting (use only for diagnostics).
 3. Per-seed `metrics.json` contains per-fit Wald CIs (`beta_std`, `beta_ci_lower`, `beta_ci_upper`) for sanity checks.
 
 Each condition now also includes:
@@ -287,11 +302,14 @@ Config flags (`configs/default.yaml`):
 python scripts/summarize_metrics.py \
   --root artifacts/training_metrics_fair/grid_runs \
   --csv artifacts/metrics_summary_fair.csv \
-  --aggregate-csv artifacts/metrics_summary_fair_aggregated.csv
+  --aggregate-csv artifacts/metrics_summary_fair_aggregated.csv \
+  --aggregate-json artifacts/metrics_summary_fair_aggregated.json \
+  --aggregate-plots-dir artifacts/training_metrics_fair/grid_runs/aggregate_plots
 ```
 
-`--aggregate-csv` reports mean/std of `beta_gat` and `beta_gap` across seeds per topology,
+`--aggregate-csv` reports mean/std of `beta_gat` and `beta_gap` across seeds per `(n, q, topology)` cell,
 plus the best run (`beta_gat_best`, `beta_gat_best_seed`, `beta_gap_at_best`).
+`scripts/run_replication.sh` runs the same aggregation automatically after all seeds finish.
 
 Scan multiple artifact trees (e.g. grid + smoke) with repeated `--root`. Columns include
 `beta_gat`, `beta_hst_max`, `beta_gap`, `exceeds_hst_bound`, and fit diagnostics per condition.

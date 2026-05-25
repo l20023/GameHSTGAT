@@ -15,10 +15,16 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.hst_bound import compute_beta_hst_max
-from src.learning_rate_plots import learning_rate_plot_path, save_learning_rate_plot
+from src.learning_rate_plots import (
+    PlotVariant,
+    learning_rate_plot_path,
+    save_learning_rate_plot,
+)
 from src.training_pipeline import (
     DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
+    FitAnchor,
     fit_beta_from_epsilon,
+    normalize_fit_anchor,
 )
 
 
@@ -72,7 +78,8 @@ def _beta_gap_and_exceed(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Rebuild anchored_t0 learning-rate plots from metrics.json. "
+            "Rebuild anchored learning-rate plots from metrics.json. "
+            "Default fit-anchor is t1 (empirical epsilon at round 1). "
             "Use --fit-window-t-max to choose how many leading rounds enter the beta fit."
         )
     )
@@ -100,6 +107,16 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Last round index included in the fit (1-based, inclusive). "
             "Omit to use auto truncation (perfect-error suffix only)."
+        ),
+    )
+    parser.add_argument(
+        "--fit-anchor",
+        type=str,
+        choices=["t1", "t0"],
+        default="t1",
+        help=(
+            "Decay anchor: t1 uses empirical epsilon(1) (default, matches training pipeline); "
+            "t0 uses prior epsilon(0)=0.5 at round 0 for sensitivity analysis."
         ),
     )
     parser.add_argument(
@@ -161,9 +178,12 @@ def main() -> None:
         raise ValueError("--signal-quality is required (must match the training run).")
 
     seed = args.seed if args.seed is not None else _infer_seed(metrics_path, payload)
+    fit_anchor: FitAnchor = normalize_fit_anchor(args.fit_anchor)
+    plot_variant: PlotVariant = "anchored_t1" if fit_anchor == "t1" else "anchored_t0"
     beta_fit = fit_beta_from_epsilon(
         [float(v) for v in epsilon_series],
         fit_window_t_max=args.fit_window_t_max,
+        anchor=fit_anchor,
     )
     beta_hst_max = compute_beta_hst_max(float(args.signal_quality))
     convergence_warning = _convergence_warning(beta_fit)
@@ -185,11 +205,12 @@ def main() -> None:
             artifacts_dir=artifacts_dir,
             seed=seed,
             condition_key=condition_key,
+            plot_variant=plot_variant,
         )
         if args.fit_window_t_max is not None:
             safe = condition_key.replace("/", "__")
             output_path = output_path.with_name(
-                f"{safe}__anchored_t0__tmax_{args.fit_window_t_max}.png"
+                f"{safe}__{plot_variant}__tmax_{args.fit_window_t_max}.png"
             )
 
     save_learning_rate_plot(
@@ -202,6 +223,8 @@ def main() -> None:
         beta_gap=beta_gap,
         exceeds_hst_bound=exceeds_hst_bound,
         convergence_warning=convergence_warning,
+        plot_variant=plot_variant,
+        fit_anchor=fit_anchor,
     )
 
     print(f"Wrote plot: {output_path}")

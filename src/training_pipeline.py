@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -520,6 +520,14 @@ def anchored_t0_decay_values(
     return exponential_decay_values(t_values, alpha=alpha, beta=beta, epsilon_inf=epsilon_inf)
 
 
+def anchored_t1_decay_values(
+    t_values: np.ndarray, *, beta: float, epsilon_inf: float, epsilon_1: float
+) -> np.ndarray:
+    """Evaluate epsilon(t) anchored at empirical epsilon(1) with free beta/epsilon_inf."""
+    alpha = float(epsilon_1) - float(epsilon_inf)
+    return alpha * np.exp(-beta * (t_values - 1.0)) + epsilon_inf
+
+
 def _exponential_decay(
     t_values: np.ndarray, alpha: float, beta: float, epsilon_inf: float
 ) -> np.ndarray:
@@ -532,6 +540,14 @@ def _anchored_t0_decay(
     t_values: np.ndarray, beta: float, epsilon_inf: float
 ) -> np.ndarray:
     return anchored_t0_decay_values(t_values, beta=beta, epsilon_inf=epsilon_inf)
+
+
+def _anchored_t1_decay(
+    t_values: np.ndarray, beta: float, epsilon_inf: float, epsilon_1: float
+) -> np.ndarray:
+    return anchored_t1_decay_values(
+        t_values, beta=beta, epsilon_inf=epsilon_inf, epsilon_1=epsilon_1
+    )
 
 
 def _fit_quality_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float]:
@@ -549,6 +565,15 @@ def _fit_quality_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float,
 WALD_CI_Z = 1.959963984540054  # 95% normal-approx z-score
 PERFECT_ERROR_TOLERANCE = 0.0  # epsilon(t) at or below this counts as perfect
 PLATEAU_MIN_FIT_POINTS = 5  # minimum number of points required to fit
+PRIOR_EPSILON_AT_T0 = 0.5
+FitAnchor = Literal["t1", "t0"]
+
+
+def normalize_fit_anchor(anchor: str) -> FitAnchor:
+    normalized = anchor.strip().lower()
+    if normalized not in ("t1", "t0"):
+        raise ValueError("fit anchor must be 't1' or 't0'.")
+    return normalized  # type: ignore[return-value]
 
 
 def _detect_fit_window(
@@ -593,6 +618,7 @@ def _finalize_fit_result(
     fit_window_t_max: int | None = None,
     plateau_detected: bool = False,
     n_full_series: int | None = None,
+    fit_anchor: FitAnchor = "t1",
 ) -> dict[str, float | bool | str]:
     y_pred = _exponential_decay(t_values, alpha, beta, epsilon_inf)
     rmse, r2 = _fit_quality_metrics(y_true, y_pred)
@@ -641,6 +667,7 @@ def _finalize_fit_result(
         "fit_window_t_max": fit_window_t_max_value,
         "n_full_series": n_full,
         "plateau_detected": bool(plateau_detected),
+        "fit_anchor": fit_anchor,
         "failure_reason": failure_reason if not fit_success else "",
     }
 
@@ -649,19 +676,23 @@ def _fallback_beta_fit(
     epsilon_series: list[float],
     *,
     fit_window_t_max: int | None = None,
+    anchor: FitAnchor = "t1",
 ) -> dict[str, float | bool | str]:
-    """Fit anchored epsilon decay using a log-linear fallback without scipy."""
+    """Log-linear fallback for anchored epsilon decay (t1 empirical or t0 prior)."""
     y_full = np.asarray(epsilon_series, dtype=float)
     n_full = len(y_full)
     window = n_full if fit_window_t_max is None else int(fit_window_t_max)
     plateau_detected = window < n_full
     y = y_full[:window]
     t = np.arange(1, len(y) + 1, dtype=float)
+    epsilon_1 = float(y[0])
     min_positive = max(float(np.max(y)) * 1e-6, 1e-9)
 
-    # Search epsilon_inf candidates to stabilize the log-linear fallback.
     y_min = float(np.min(y))
-    epsilon_upper = min(0.5 - min_positive, y_min - min_positive)
+    if anchor == "t1":
+        epsilon_upper = min(epsilon_1 - min_positive, y_min - min_positive)
+    else:
+        epsilon_upper = min(PRIOR_EPSILON_AT_T0 - min_positive, y_min - min_positive)
     if epsilon_upper <= 0.0:
         epsilon_upper = min_positive
     candidates = np.linspace(0.0, epsilon_upper, num=80, dtype=float)
@@ -670,38 +701,55 @@ def _fallback_beta_fit(
 
     best_result: tuple[float, float, float] | None = None
     for epsilon_inf in candidates:
-        if epsilon_inf >= 0.5:
-            continue
-        anchor_scale = 0.5 - float(epsilon_inf)
-        if anchor_scale <= 0.0:
-            continue
-        shifted = y - float(epsilon_inf)
-        if np.any(shifted <= 0.0):
-            continue
-        normalized = shifted / anchor_scale
-        if np.any(normalized <= 0.0):
-            continue
-        slope, _ = np.polyfit(t, np.log(normalized), 1)
-        beta = max(0.0, float(-slope))
-        alpha = anchor_scale
-        y_pred = anchored_t0_decay_values(t, beta=beta, epsilon_inf=float(epsilon_inf))
+        if anchor == "t1":
+            if epsilon_inf >= epsilon_1:
+                continue
+            anchor_scale = epsilon_1 - float(epsilon_inf)
+            if anchor_scale <= 0.0:
+                continue
+            shifted = y - float(epsilon_inf)
+            if np.any(shifted <= 0.0):
+                continue
+            normalized = shifted / anchor_scale
+            if np.any(normalized <= 0.0):
+                continue
+            slope, _ = np.polyfit(t - 1.0, np.log(normalized), 1)
+            beta = max(0.0, float(-slope))
+            y_pred = anchored_t1_decay_values(
+                t, beta=beta, epsilon_inf=float(epsilon_inf), epsilon_1=epsilon_1
+            )
+        else:
+            if epsilon_inf >= PRIOR_EPSILON_AT_T0:
+                continue
+            anchor_scale = PRIOR_EPSILON_AT_T0 - float(epsilon_inf)
+            if anchor_scale <= 0.0:
+                continue
+            shifted = y - float(epsilon_inf)
+            if np.any(shifted <= 0.0):
+                continue
+            normalized = shifted / anchor_scale
+            if np.any(normalized <= 0.0):
+                continue
+            slope, _ = np.polyfit(t, np.log(normalized), 1)
+            beta = max(0.0, float(-slope))
+            y_pred = anchored_t0_decay_values(t, beta=beta, epsilon_inf=float(epsilon_inf))
         rmse, _ = _fit_quality_metrics(y, y_pred)
         if best_result is None or rmse < best_result[0]:
             best_result = (rmse, beta, float(epsilon_inf))
 
+    method_prefix = f"anchored_{anchor}"
     if best_result is None:
-        empty = _empty_fit_result(
-            "anchored_t0_log_linear_fallback", "fallback_failed"
-        )
+        empty = _empty_fit_result(f"{method_prefix}_log_linear_fallback", "fallback_failed")
         empty["fit_window_t_max"] = window
         empty["n_full_series"] = n_full
         empty["plateau_detected"] = plateau_detected
+        empty["fit_anchor"] = anchor
         return empty
 
     _, beta, epsilon_inf = best_result
-    alpha = 0.5 - epsilon_inf
+    alpha = (epsilon_1 - epsilon_inf) if anchor == "t1" else (PRIOR_EPSILON_AT_T0 - epsilon_inf)
     return _finalize_fit_result(
-        method="anchored_t0_log_linear_fallback",
+        method=f"{method_prefix}_log_linear_fallback",
         alpha=alpha,
         beta=beta,
         epsilon_inf=epsilon_inf,
@@ -710,10 +758,13 @@ def _fallback_beta_fit(
         fit_window_t_max=window,
         plateau_detected=plateau_detected,
         n_full_series=n_full,
+        fit_anchor=anchor,
     )
 
 
-def _empty_fit_result(method: str, failure_reason: str) -> dict[str, float | bool | str]:
+def _empty_fit_result(
+    method: str, failure_reason: str, *, fit_anchor: FitAnchor = "t1"
+) -> dict[str, float | bool | str]:
     return {
         "alpha": float("nan"),
         "beta": float("nan"),
@@ -728,6 +779,7 @@ def _empty_fit_result(method: str, failure_reason: str) -> dict[str, float | boo
         "fit_window_t_max": 0,
         "n_full_series": 0,
         "plateau_detected": False,
+        "fit_anchor": fit_anchor,
         "failure_reason": failure_reason,
     }
 
@@ -736,19 +788,22 @@ def fit_beta_from_epsilon(
     epsilon_series: list[float],
     *,
     fit_window_t_max: int | None = None,
+    anchor: FitAnchor = "t1",
 ) -> dict[str, float | bool | str]:
-    """Fit anchored epsilon(t) with epsilon(0)=0.5 and robust fallback.
+    """Fit anchored exponential decay with scipy and log-linear fallback.
 
-    When `fit_window_t_max` is None, auto-truncates only a trailing suffix of
-    perfect-error rounds (epsilon=0). Pass an explicit window to override (e.g.
-    from replay plotting). The full series is stored as `n_full_series`.
+    anchor='t1' (default): epsilon(t) = (epsilon(1) - eps_inf)*exp(-beta*(t-1)) + eps_inf
+    anchor='t0': epsilon(t) = (0.5 - eps_inf)*exp(-beta*t) + eps_inf  (prior at round 0)
+
+    Pipeline runs use anchor='t1'. Manual replay scripts may pass anchor='t0'.
     """
+    anchor = normalize_fit_anchor(anchor)
     if len(epsilon_series) < 3:
-        return _empty_fit_result("insufficient_points", "insufficient_points")
+        return _empty_fit_result("insufficient_points", "insufficient_points", fit_anchor=anchor)
 
     y_full = np.asarray(epsilon_series, dtype=float)
     if not np.all(np.isfinite(y_full)):
-        return _empty_fit_result("non_finite_input", "non_finite_input")
+        return _empty_fit_result("non_finite_input", "non_finite_input", fit_anchor=anchor)
 
     n_full = len(y_full)
     if fit_window_t_max is None:
@@ -758,27 +813,51 @@ def fit_beta_from_epsilon(
     plateau_detected = window < n_full
     y = y_full[:window]
     t = np.arange(1, len(y) + 1, dtype=float)
+    epsilon_1 = float(y[0])
     try:
         from scipy.optimize import curve_fit  # type: ignore
 
-        epsilon_inf_guess = max(0.0, min(0.49, float(np.mean(y[-min(5, len(y)) :]))))
-        initial_guess = (0.1, epsilon_inf_guess)
-        bounds = ((0.0, 0.0), (10.0, 0.499999))
-        params, pcov = curve_fit(
-            _anchored_t0_decay,
-            t,
-            y,
-            p0=initial_guess,
-            bounds=bounds,
-            maxfev=10_000,
-        )
+        if anchor == "t1":
+            epsilon_inf_guess = max(
+                0.0, min(epsilon_1 - 1e-6, float(np.mean(y[-min(5, len(y)) :])))
+            )
+            initial_guess = (0.1, epsilon_inf_guess)
+            bounds = ((0.0, 0.0), (10.0, max(epsilon_1 - 1e-9, 1e-9)))
+            params, pcov = curve_fit(
+                _anchored_t1_decay,
+                t,
+                y,
+                p0=initial_guess,
+                bounds=bounds,
+                maxfev=10_000,
+                fargs=(epsilon_1,),
+            )
+            alpha = epsilon_1 - float(params[1])
+            method = "scipy_anchored_t1"
+        else:
+            epsilon_inf_guess = max(
+                0.0, min(PRIOR_EPSILON_AT_T0 - 1e-6, float(np.mean(y[-min(5, len(y)) :])))
+            )
+            initial_guess = (0.1, epsilon_inf_guess)
+            bounds = ((0.0, 0.0), (10.0, PRIOR_EPSILON_AT_T0 - 1e-9))
+            params, pcov = curve_fit(
+                _anchored_t0_decay,
+                t,
+                y,
+                p0=initial_guess,
+                bounds=bounds,
+                maxfev=10_000,
+            )
+            alpha = PRIOR_EPSILON_AT_T0 - float(params[1])
+            method = "scipy_anchored_t0"
+
         beta = float(params[0])
         epsilon_inf = float(params[1])
         beta_variance = float(pcov[0, 0]) if np.all(np.isfinite(pcov)) else float("nan")
         beta_std = float(np.sqrt(beta_variance)) if beta_variance >= 0.0 else float("nan")
         return _finalize_fit_result(
-            method="scipy_anchored_t0",
-            alpha=0.5 - epsilon_inf,
+            method=method,
+            alpha=alpha,
             beta=beta,
             epsilon_inf=epsilon_inf,
             y_true=y,
@@ -787,9 +866,10 @@ def fit_beta_from_epsilon(
             fit_window_t_max=window,
             plateau_detected=plateau_detected,
             n_full_series=n_full,
+            fit_anchor=anchor,
         )
     except Exception:
-        return _fallback_beta_fit(epsilon_series, fit_window_t_max=window)
+        return _fallback_beta_fit(epsilon_series, fit_window_t_max=window, anchor=anchor)
 
 
 def run_condition_experiment(
@@ -845,7 +925,7 @@ def run_condition_experiment(
     if disable_beta_fit:
         beta_fit: dict[str, float | bool | str] = _empty_fit_result("disabled", "disabled")
     else:
-        beta_fit = fit_beta_from_epsilon(epsilon_series)
+        beta_fit = fit_beta_from_epsilon(epsilon_series, anchor="t1")
 
     beta_hst_max = compute_beta_hst_max(signal_quality)
     epsilon_inf_value = beta_fit.get("epsilon_inf")
@@ -947,9 +1027,13 @@ __all__ = [
     "consensus_to_dict",
     "compute_epsilon_series",
     "evaluate_test_episodes",
+    "FitAnchor",
+    "PRIOR_EPSILON_AT_T0",
     "anchored_t0_decay_values",
-    "exponential_decay_values",
+    "anchored_t1_decay_values",
     "fit_beta_from_epsilon",
+    "normalize_fit_anchor",
+    "exponential_decay_values",
     "resolve_runtime_device",
     "run_condition_experiment",
     "train_condition_model",

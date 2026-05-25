@@ -59,6 +59,18 @@ def parse_args() -> argparse.Namespace:
         help="Path to write aggregated metrics CSV.",
     )
     parser.add_argument(
+        "--aggregate-json",
+        type=Path,
+        default=None,
+        help="Path to write seed-aggregated summary JSON.",
+    )
+    parser.add_argument(
+        "--aggregate-plots-dir",
+        type=Path,
+        default=None,
+        help="Directory for beta_vs_q / beta_vs_n aggregate plots.",
+    )
+    parser.add_argument(
         "--seeds",
         type=str,
         default=None,
@@ -141,30 +153,39 @@ def main() -> None:
 
     metrics_csv = args.metrics_csv
     aggregate_csv = args.aggregate_csv
-    if metrics_csv is None or aggregate_csv is None:
-        parent = artifacts_root.parent
-        suffix = "fair" if args.communication_mode == "fair_1bit" else "vector"
-        if metrics_csv is None:
-            metrics_csv = parent.parent / f"metrics_summary_{suffix}.csv"
-        if aggregate_csv is None:
-            aggregate_csv = parent.parent / f"metrics_summary_{suffix}_aggregated.csv"
+    aggregate_json = args.aggregate_json
+    aggregate_plots_dir = args.aggregate_plots_dir
+    parent = artifacts_root.parent
+    suffix = "fair" if args.communication_mode == "fair_1bit" else "vector"
+    if metrics_csv is None:
+        metrics_csv = parent.parent / f"metrics_summary_{suffix}.csv"
+    if aggregate_csv is None:
+        aggregate_csv = parent.parent / f"metrics_summary_{suffix}_aggregated.csv"
+    if aggregate_json is None:
+        aggregate_json = aggregate_csv.with_suffix(".json")
+    if aggregate_plots_dir is None:
+        aggregate_plots_dir = artifacts_root / "aggregate_plots"
 
     summarize_script = PROJECT_ROOT / "scripts" / "summarize_metrics.py"
-    subprocess.run(
-        [
-            sys.executable,
-            str(summarize_script),
-            "--root",
-            str(artifacts_root),
-            "--csv",
-            str(metrics_csv),
-            "--aggregate-csv",
-            str(aggregate_csv),
-        ],
-        check=True,
-    )
+    cmd = [
+        sys.executable,
+        str(summarize_script),
+        "--root",
+        str(artifacts_root),
+        "--csv",
+        str(metrics_csv),
+        "--aggregate-csv",
+        str(aggregate_csv),
+        "--aggregate-json",
+        str(aggregate_json),
+        "--aggregate-plots-dir",
+        str(aggregate_plots_dir),
+    ]
+    subprocess.run(cmd, check=True)
     print(f"Metrics CSV written to: {metrics_csv}")
     print(f"Aggregated CSV written to: {aggregate_csv}")
+    print(f"Aggregated JSON written to: {aggregate_json}")
+    print(f"Aggregate plots written to: {aggregate_plots_dir}")
 
 
 if __name__ == "__main__":

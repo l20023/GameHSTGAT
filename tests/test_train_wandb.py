@@ -164,5 +164,5 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
     assert metrics["seed"] == 0
     assert len(metrics["conditions"]) == 3
     complete_metrics = metrics["conditions"]["n_10/complete"]
-    assert complete_metrics["learning_rate_plot"].endswith("__anchored_t0.png")
-    assert complete_metrics["learning_rate_plot_anchored_t0"].endswith("__anchored_t0.png")
+    assert complete_metrics["learning_rate_plot"].endswith("__anchored_t1.png")
+    assert complete_metrics["learning_rate_plot_anchored_t1"].endswith("__anchored_t1.png")

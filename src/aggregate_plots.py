@@ -201,4 +201,54 @@ def save_beta_vs_n_plot(
     return output_path
 
 
-__all__ = ["save_beta_vs_n_plot", "save_beta_vs_q_plot"]
+def emit_seed_aggregate_plots(
+    *,
+    records: list[dict[str, Any]],
+    output_dir: Path,
+    num_nodes_list: list[int] | None = None,
+    signal_quality_list: list[float] | None = None,
+) -> dict[str, str]:
+    """Write cross-seed beta vs q / beta vs n plots; returns paths or error keys."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if num_nodes_list is None:
+        num_nodes_list = sorted(
+            {
+                int(record["num_nodes"])
+                for record in records
+                if isinstance(record.get("num_nodes"), int)
+            }
+        )
+    if signal_quality_list is None:
+        signal_quality_list = sorted(
+            {
+                float(record["signal_quality"])
+                for record in records
+                if isinstance(record.get("signal_quality"), (int, float))
+            }
+        )
+
+    paths: dict[str, str] = {}
+    try:
+        beta_vs_q_path = save_beta_vs_q_plot(
+            output_path=output_dir / "beta_vs_q.png",
+            records=records,
+            num_nodes_values=num_nodes_list,
+        )
+        paths["beta_vs_q"] = str(beta_vs_q_path)
+    except Exception as exc:  # pragma: no cover
+        paths["beta_vs_q_error"] = str(exc)
+
+    try:
+        beta_vs_n_path = save_beta_vs_n_plot(
+            output_path=output_dir / "beta_vs_n.png",
+            records=records,
+            signal_quality_values=signal_quality_list,
+        )
+        paths["beta_vs_n"] = str(beta_vs_n_path)
+    except Exception as exc:  # pragma: no cover
+        paths["beta_vs_n_error"] = str(exc)
+
+    return paths
+
+
+__all__ = ["emit_seed_aggregate_plots", "save_beta_vs_n_plot", "save_beta_vs_q_plot"]

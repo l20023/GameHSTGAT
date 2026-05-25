@@ -172,14 +172,14 @@ def run_single_seed(
                     save_consensus_series=save_consensus_series,
                 )
                 if save_learning_rate_plots:
-                    anchored_t0_plot_path = learning_rate_plot_path(
+                    anchored_t1_plot_path = learning_rate_plot_path(
                         artifacts_dir=artifacts_dir,
                         seed=seed,
                         condition_key=key,
-                        plot_variant="anchored_t0",
+                        plot_variant="anchored_t1",
                     )
                     save_learning_rate_plot(
-                        output_path=anchored_t0_plot_path,
+                        output_path=anchored_t1_plot_path,
                         epsilon_series=result.epsilon_series,
                         beta_fit=result.beta_fit,
                         beta_hst_max=result.beta_hst_max,
@@ -188,10 +188,10 @@ def run_single_seed(
                         beta_gap=result.beta_gap,
                         exceeds_hst_bound=result.exceeds_hst_bound,
                         convergence_warning=result.convergence_warning,
-                        plot_variant="anchored_t0",
+                        plot_variant="anchored_t1",
                     )
-                    condition_metrics["learning_rate_plot"] = str(anchored_t0_plot_path)
-                    condition_metrics["learning_rate_plot_anchored_t0"] = str(anchored_t0_plot_path)
+                    condition_metrics["learning_rate_plot"] = str(anchored_t1_plot_path)
+                    condition_metrics["learning_rate_plot_anchored_t1"] = str(anchored_t1_plot_path)
                     train_loss_path = train_loss_plot_path(
                         artifacts_dir=artifacts_dir,
                         seed=seed,
@@ -217,6 +217,8 @@ def run_single_seed(
             artifacts_dir=artifacts_dir,
             seed=seed,
             metrics=per_condition_metrics,
+            signal_quality=signal_quality,
+            num_nodes=num_nodes,
         )
     finally:
         finish_wandb_run(wandb_run)
@@ -236,21 +238,27 @@ def run_single_seed(
     }
 
 
-def save_seed_metrics(*, artifacts_dir: Path, seed: int, metrics: dict[str, dict]) -> None:
+def save_seed_metrics(
+    *,
+    artifacts_dir: Path,
+    seed: int,
+    metrics: dict[str, dict],
+    signal_quality: float | None = None,
+    num_nodes: int | None = None,
+) -> None:
     """Persist one seed's condition metrics to JSON artifacts."""
     seed_dir = artifacts_dir / f"seed_{seed}"
     seed_dir.mkdir(parents=True, exist_ok=True)
     output_path = seed_dir / "metrics.json"
-    output_path.write_text(
-        json.dumps(
-            {
-                "seed": seed,
-                "conditions": metrics,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    payload: dict[str, Any] = {
+        "seed": seed,
+        "conditions": metrics,
+    }
+    if signal_quality is not None:
+        payload["signal_quality"] = signal_quality
+    if num_nodes is not None:
+        payload["num_nodes"] = num_nodes
+    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def parse_args() -> argparse.Namespace:

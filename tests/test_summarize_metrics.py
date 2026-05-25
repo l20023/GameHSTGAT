@@ -169,6 +169,31 @@ def test_aggregate_records_computes_se_ci_and_convergence_rate() -> None:
     assert row["convergence_warning_rate"] == pytest.approx(0.5)
 
 
+def test_load_metrics_records_reads_run_metadata_from_payload(tmp_path: Path) -> None:
+    metrics_path = tmp_path / "seed_3" / "metrics.json"
+    metrics_path.parent.mkdir(parents=True)
+    metrics_path.write_text(
+        json.dumps(
+            {
+                "seed": 3,
+                "signal_quality": 0.65,
+                "num_nodes": 10,
+                "conditions": {
+                    "n_10/complete": {
+                        "beta_fit": {"beta": 0.2, "fit_success": True},
+                        "beta_hst_max": 1.0,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    records = load_metrics_records(metrics_path)
+    assert len(records) == 1
+    assert records[0]["signal_quality"] == 0.65
+    assert records[0]["num_nodes"] == 10
+
+
 def test_write_csv_creates_table(tmp_path: Path) -> None:
     metrics_path = tmp_path / "seed_2" / "metrics.json"
     metrics_path.parent.mkdir(parents=True)

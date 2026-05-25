@@ -8,7 +8,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from src.aggregate_plots import save_beta_vs_n_plot, save_beta_vs_q_plot
+from src.aggregate_plots import emit_seed_aggregate_plots
+from src.metrics_aggregate import aggregate_records as aggregate_seed_records
 from src.grid_tasks import format_signal_quality_label
 from src.reporting import classify_regimes
 
@@ -277,31 +278,12 @@ def emit_aggregate_plots(
     num_nodes_list: list[int],
     signal_quality_list: list[float],
 ) -> dict[str, str]:
-    plots_dir = artifacts_root / "aggregate_plots"
-    plots_dir.mkdir(parents=True, exist_ok=True)
-
-    paths: dict[str, str] = {}
-    try:
-        beta_vs_q_path = save_beta_vs_q_plot(
-            output_path=plots_dir / "beta_vs_q.png",
-            records=records,
-            num_nodes_values=num_nodes_list,
-        )
-        paths["beta_vs_q"] = str(beta_vs_q_path)
-    except Exception as exc:  # pragma: no cover - plotting is best-effort
-        paths["beta_vs_q_error"] = str(exc)
-
-    try:
-        beta_vs_n_path = save_beta_vs_n_plot(
-            output_path=plots_dir / "beta_vs_n.png",
-            records=records,
-            signal_quality_values=signal_quality_list,
-        )
-        paths["beta_vs_n"] = str(beta_vs_n_path)
-    except Exception as exc:  # pragma: no cover - plotting is best-effort
-        paths["beta_vs_n_error"] = str(exc)
-
-    return paths
+    return emit_seed_aggregate_plots(
+        records=records,
+        output_dir=artifacts_root / "aggregate_plots",
+        num_nodes_list=num_nodes_list,
+        signal_quality_list=signal_quality_list,
+    )
 
 
 def build_grid_summary(
@@ -327,6 +309,7 @@ def build_grid_summary(
         "num_condition_records": len(records),
         "run_summaries": run_summaries or [],
         "aggregates": aggregates,
+        "seed_aggregates_per_cell": aggregate_seed_records(records),
         "regime_classification": regime_classification,
         "aggregate_plots": aggregate_plot_paths,
     }
