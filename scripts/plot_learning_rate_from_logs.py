@@ -79,7 +79,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Rebuild anchored learning-rate plots from metrics.json. "
-            "Default fit-anchor is t1 (empirical epsilon at round 1). "
+            "Default fit-anchor is t0 (prior epsilon(0)=0.5 at round 0). "
             "Use --fit-window-t-max to choose how many leading rounds enter the beta fit."
         )
     )
@@ -113,10 +113,10 @@ def parse_args() -> argparse.Namespace:
         "--fit-anchor",
         type=str,
         choices=["t1", "t0"],
-        default="t1",
+        default="t0",
         help=(
-            "Decay anchor: t1 uses empirical epsilon(1) (default, matches training pipeline); "
-            "t0 uses prior epsilon(0)=0.5 at round 0 for sensitivity analysis."
+            "Decay anchor: t0 uses prior epsilon(0)=0.5 at round 0 (default, matches training); "
+            "t1 uses empirical epsilon(1) at round 1 for sensitivity analysis."
         ),
     )
     parser.add_argument(

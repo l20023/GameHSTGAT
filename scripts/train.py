@@ -134,14 +134,14 @@ def run_single_seed(
                 save_consensus_series=save_consensus_series,
             )
             if save_learning_rate_plots:
-                anchored_t1_plot_path = learning_rate_plot_path(
+                anchored_t0_plot_path = learning_rate_plot_path(
                     artifacts_dir=artifacts_dir,
                     seed=seed,
                     condition_key=key,
-                    plot_variant="anchored_t1",
+                    plot_variant="anchored_t0",
                 )
                 save_learning_rate_plot(
-                    output_path=anchored_t1_plot_path,
+                    output_path=anchored_t0_plot_path,
                     epsilon_series=result.epsilon_series,
                     beta_fit=result.beta_fit,
                     beta_hst_max=result.beta_hst_max,
@@ -150,11 +150,11 @@ def run_single_seed(
                     beta_gap=result.beta_gap,
                     exceeds_hst_bound=result.exceeds_hst_bound,
                     convergence_warning=result.convergence_warning,
-                    plot_variant="anchored_t1",
-                    fit_anchor="t1",
+                    plot_variant="anchored_t0",
+                    fit_anchor="t0",
                 )
-                condition_metrics["learning_rate_plot"] = str(anchored_t1_plot_path)
-                condition_metrics["learning_rate_plot_anchored_t1"] = str(anchored_t1_plot_path)
+                condition_metrics["learning_rate_plot"] = str(anchored_t0_plot_path)
+                condition_metrics["learning_rate_plot_anchored_t0"] = str(anchored_t0_plot_path)
                 train_loss_path = train_loss_plot_path(
                     artifacts_dir=artifacts_dir,
                     seed=seed,

@@ -200,21 +200,20 @@ Fairness protocol for HST comparison:
 
 - Graph cache: `artifacts/graphs`
 - Metrics: `artifacts/training_metrics/seed_<seed>/metrics.json` (compact by default)
-- Plots: `artifacts/.../seed_<seed>/plots/<condition>__anchored_t1.png` and `<condition>__train_loss.png`
+- Plots: `artifacts/.../seed_<seed>/plots/<condition>__anchored_t0.png` and `<condition>__train_loss.png`
 
 Each metrics file stores beta fit, HST comparison, and `train_loss_final`. Full
 `train_loss_history` / `epsilon_series` arrays in JSON are omitted unless enabled in config.
 
-Learning-rate plots use the default **fit-anchor `t1`** (`__anchored_t1` filename suffix):
-- Fit model: `epsilon(t) = (epsilon(1) - epsilon_inf) * exp(-beta * (t-1)) + epsilon_inf` for `t = 1..T`.
-- `epsilon(1)` is the **empirical** test error at round 1 (agents already use private signals); the curve passes through that point exactly.
-- GAT and HST reference curves share fitted `epsilon_inf` and the same `epsilon(1)`; HST uses `beta_HST_max` (max permitted slope, not a forecast).
+Learning-rate plots use the default **fit-anchor `t0`** (`__anchored_t0` filename suffix):
+- Fit model: `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf` for `t = 1..T` (prior `epsilon(0)=0.5` at round 0).
+- GAT and HST reference curves share fitted `epsilon_inf` and the same `t=0` prior anchor; HST uses `beta_HST_max` (max permitted slope, not a forecast).
 - Both curves are drawn over the **full** empirical series when plots are generated; the grey fit-window marker shows where beta was estimated.
-- **Log panel:** `epsilon(t) - epsilon_inf` with the same `t=1` anchor for slope comparison.
+- **Log panel:** `epsilon(t) - epsilon_inf` with the same anchor for slope comparison.
 
-**Fit-anchor `t0`** (sensitivity only, not the pipeline default): prior `epsilon(0)=0.5` at round 0,
-`epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf`. Select via
-`--fit-anchor t0` in `plot_learning_rate_from_logs.py`; output suffix is `__anchored_t0`.
+**Fit-anchor `t1`** (sensitivity): empirical `epsilon(1)` at round 1,
+`epsilon(t) = (epsilon(1) - epsilon_inf) * exp(-beta * (t-1)) + epsilon_inf`. Select via
+`--fit-anchor t1` in `plot_learning_rate_from_logs.py`; output suffix is `__anchored_t1`.
 
 ### Re-plot learning-rate curves from saved logs
 
@@ -230,7 +229,7 @@ python scripts/plot_learning_rate_from_logs.py \
   --list-conditions
 ```
 
-Auto-fit with default anchor `t1` (truncates only a trailing suffix with perfect error rate `epsilon=0`):
+Auto-fit with default anchor `t0` (truncates only a trailing suffix with perfect error rate `epsilon=0`):
 
 ```bash
 python scripts/plot_learning_rate_from_logs.py \
@@ -239,14 +238,14 @@ python scripts/plot_learning_rate_from_logs.py \
   --signal-quality 0.6
 ```
 
-Prior anchor `t0` (uninformed prior at round 0):
+Empirical anchor `t1` (round-1 error):
 
 ```bash
 python scripts/plot_learning_rate_from_logs.py \
   --metrics artifacts/_smoke/seed_1/metrics.json \
   --condition n_10/complete \
   --signal-quality 0.6 \
-  --fit-anchor t0
+  --fit-anchor t1
 ```
 
 Manual fit window — last round **included** in the beta fit (`1`-based, inclusive):
@@ -271,12 +270,12 @@ python scripts/plot_learning_rate_from_logs.py \
 ```
 
 Without `--output`, a manual `--fit-window-t-max` writes
-`<artifacts>/seed_<S>/plots/<condition>__anchored_t1__tmax_<T>.png` (or `__anchored_t0__` with `--fit-anchor t0`)
+`<artifacts>/seed_<S>/plots/<condition>__anchored_t0__tmax_<T>.png` (or `__anchored_t1__` with `--fit-anchor t1`)
 so original plots are not overwritten.
 
 Reading order for plots:
 1. Aggregate plots in `<artifacts_dir>/grid_runs/aggregate_plots/` (or `aggregate/plots/` after replication) give the headline view (beta vs q, beta vs n with HST reference).
-2. Per-condition `__anchored_t1` plots show the empirical decay vs both fits for a single seed/setting (use only for diagnostics).
+2. Per-condition `__anchored_t0` plots show the empirical decay vs both fits for a single seed/setting (use only for diagnostics).
 3. Per-seed `metrics.json` contains per-fit Wald CIs (`beta_std`, `beta_ci_lower`, `beta_ci_upper`) for sanity checks.
 
 Each condition now also includes:

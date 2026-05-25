@@ -618,7 +618,7 @@ def _finalize_fit_result(
     fit_window_t_max: int | None = None,
     plateau_detected: bool = False,
     n_full_series: int | None = None,
-    fit_anchor: FitAnchor = "t1",
+    fit_anchor: FitAnchor = "t0",
 ) -> dict[str, float | bool | str]:
     y_pred = _exponential_decay(t_values, alpha, beta, epsilon_inf)
     rmse, r2 = _fit_quality_metrics(y_true, y_pred)
@@ -676,9 +676,9 @@ def _fallback_beta_fit(
     epsilon_series: list[float],
     *,
     fit_window_t_max: int | None = None,
-    anchor: FitAnchor = "t1",
+    anchor: FitAnchor = "t0",
 ) -> dict[str, float | bool | str]:
-    """Log-linear fallback for anchored epsilon decay (t1 empirical or t0 prior)."""
+    """Log-linear fallback for anchored epsilon decay (t0 prior or t1 empirical)."""
     y_full = np.asarray(epsilon_series, dtype=float)
     n_full = len(y_full)
     window = n_full if fit_window_t_max is None else int(fit_window_t_max)
@@ -763,7 +763,7 @@ def _fallback_beta_fit(
 
 
 def _empty_fit_result(
-    method: str, failure_reason: str, *, fit_anchor: FitAnchor = "t1"
+    method: str, failure_reason: str, *, fit_anchor: FitAnchor = "t0"
 ) -> dict[str, float | bool | str]:
     return {
         "alpha": float("nan"),
@@ -788,14 +788,14 @@ def fit_beta_from_epsilon(
     epsilon_series: list[float],
     *,
     fit_window_t_max: int | None = None,
-    anchor: FitAnchor = "t1",
+    anchor: FitAnchor = "t0",
 ) -> dict[str, float | bool | str]:
     """Fit anchored exponential decay with scipy and log-linear fallback.
 
-    anchor='t1' (default): epsilon(t) = (epsilon(1) - eps_inf)*exp(-beta*(t-1)) + eps_inf
-    anchor='t0': epsilon(t) = (0.5 - eps_inf)*exp(-beta*t) + eps_inf  (prior at round 0)
+    anchor='t0' (default): epsilon(t) = (0.5 - eps_inf)*exp(-beta*t) + eps_inf  (prior at round 0)
+    anchor='t1': epsilon(t) = (epsilon(1) - eps_inf)*exp(-beta*(t-1)) + eps_inf  (empirical at round 1)
 
-    Pipeline runs use anchor='t1'. Manual replay scripts may pass anchor='t0'.
+    Pipeline runs and plots use anchor='t0' by default. Pass anchor='t1' for sensitivity.
     """
     anchor = normalize_fit_anchor(anchor)
     if len(epsilon_series) < 3:
@@ -925,7 +925,7 @@ def run_condition_experiment(
     if disable_beta_fit:
         beta_fit: dict[str, float | bool | str] = _empty_fit_result("disabled", "disabled")
     else:
-        beta_fit = fit_beta_from_epsilon(epsilon_series, anchor="t1")
+        beta_fit = fit_beta_from_epsilon(epsilon_series, anchor="t0")
 
     beta_hst_max = compute_beta_hst_max(signal_quality)
     epsilon_inf_value = beta_fit.get("epsilon_inf")

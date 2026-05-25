@@ -100,12 +100,11 @@ def test_save_learning_rate_plot_with_convergence_warning(tmp_path: Path) -> Non
 
 
 def test_learning_rate_plot_path_sanitizes_condition_key() -> None:
-    anchored_t1_path = learning_rate_plot_path(
+    anchored_t0_path = learning_rate_plot_path(
         artifacts_dir=Path("artifacts/fair"),
         seed=2,
         condition_key="n_10/ws_p_0.1_seed_2",
-        plot_variant="anchored_t1",
     )
-    assert anchored_t1_path == Path(
-        "artifacts/fair/seed_2/plots/n_10__ws_p_0.1_seed_2__anchored_t1.png"
+    assert anchored_t0_path == Path(
+        "artifacts/fair/seed_2/plots/n_10__ws_p_0.1_seed_2__anchored_t0.png"
     )

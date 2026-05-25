@@ -78,7 +78,7 @@ def test_fit_beta_from_synthetic_exponential_series() -> None:
         (epsilon_1 - epsilon_inf) * math.exp(-beta * (t - 1)) + epsilon_inf
         for t in range(1, 21)
     ]
-    fit = fit_beta_from_epsilon(epsilon_series)
+    fit = fit_beta_from_epsilon(epsilon_series, anchor="t1")
     assert fit["fit_success"] is True
     assert isinstance(fit["beta"], float)
     assert abs(float(fit["beta"]) - beta) < 0.05
@@ -106,7 +106,7 @@ def test_fit_beta_truncates_at_perfect_error_suffix() -> None:
     perfect_part = [0.0] * perfect_length
     series = decay_part + perfect_part
 
-    fit = fit_beta_from_epsilon(series)
+    fit = fit_beta_from_epsilon(series, anchor="t1")
     assert fit["fit_success"] is True
     assert fit["plateau_detected"] is True
     assert fit["n_full_series"] == len(series)
@@ -114,6 +114,20 @@ def test_fit_beta_truncates_at_perfect_error_suffix() -> None:
     assert fit_window < len(series)
     assert fit_window >= 5
     assert fit_window == len(decay_part)
+
+
+def test_fit_beta_default_anchor_is_t0() -> None:
+    from src.training_pipeline import PRIOR_EPSILON_AT_T0
+
+    beta = 0.35
+    epsilon_inf = 0.05
+    series = [
+        (PRIOR_EPSILON_AT_T0 - epsilon_inf) * math.exp(-beta * t) + epsilon_inf
+        for t in range(1, 21)
+    ]
+    fit = fit_beta_from_epsilon(series)
+    assert fit["fit_anchor"] == "t0"
+    assert fit["method"] in {"scipy_anchored_t0", "anchored_t0_log_linear_fallback"}
 
 
 def test_fit_beta_anchor_t0_uses_prior_at_round_zero() -> None:
@@ -166,7 +180,7 @@ def test_fit_beta_no_plateau_detection_when_decay_continues() -> None:
         (epsilon_1 - epsilon_inf) * math.exp(-beta * (t - 1)) + epsilon_inf
         for t in range(1, 21)
     ]
-    fit = fit_beta_from_epsilon(series)
+    fit = fit_beta_from_epsilon(series, anchor="t1")
     assert fit["fit_success"] is True
     assert fit["plateau_detected"] is False
     assert int(fit["fit_window_t_max"]) == len(series)

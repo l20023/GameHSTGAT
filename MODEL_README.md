@@ -97,15 +97,15 @@ Trade-off:
 
 From trained models:
 - compute `epsilon(t)` over test episodes
-- fit anchored exponential decay `epsilon(t) = (epsilon(1) - epsilon_inf) * exp(-beta * (t-1)) + epsilon_inf`
-  - `epsilon(1)` is the empirical test error at round 1 (after one signal round, not uninformed 0.5)
+- fit anchored exponential decay `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf` (default anchor `t0`, prior at round 0)
+  - optional anchor `t1`: `epsilon(t) = (epsilon(1) - epsilon_inf) * exp(-beta * (t-1)) + epsilon_inf` with empirical `epsilon(1)`
   - fit uses discrete test indices `t = 1..T`
   - primary method: `scipy.optimize.curve_fit`
   - fallback: log-linear fit when scipy fit fails
-- generate `anchored_t1` learning-rate plots per condition (default **fit-anchor `t1`** for GAT fit and HST reference):
-  - GAT and HST curves pass through empirical `epsilon(1)` and share fitted `epsilon_inf`
+- generate `anchored_t0` learning-rate plots per condition (default **fit-anchor `t0`** for GAT fit and HST reference):
+  - GAT and HST curves use prior `epsilon(0)=0.5` and share fitted `epsilon_inf`
   - HST reference decays with `beta_HST_max`; both curves span the full plotted horizon at save time
-  - optional **fit-anchor `t0`**: prior `epsilon(0)=0.5` for manual replay only (`plot_learning_rate_from_logs.py --fit-anchor t0`, suffix `__anchored_t0`)
+  - optional **fit-anchor `t1`**: empirical `epsilon(1)` (`plot_learning_rate_from_logs.py --fit-anchor t1`, suffix `__anchored_t1`)
 
 Bound comparison:
 - `beta_HST_max(q)` follows HST Theorem 1 in `src/hst_bound.py`

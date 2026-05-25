@@ -39,15 +39,15 @@ def _resolve_plot_anchor(
     *,
     fit_anchor: FitAnchor | None = None,
 ) -> FitAnchor:
-    """Resolve anchor: explicit arg > stored fit > plot variant; default t1."""
+    """Resolve anchor: explicit arg > stored fit > plot variant; default t0."""
     if fit_anchor is not None:
         return normalize_fit_anchor(fit_anchor)
     stored = beta_fit.get("fit_anchor")
     if isinstance(stored, str) and stored in ("t1", "t0"):
         return normalize_fit_anchor(stored)
-    if plot_variant == "anchored_t0":
-        return "t0"
-    return "t1"
+    if plot_variant == "anchored_t1":
+        return "t1"
+    return "t0"
 
 
 def _build_learning_rate_suptitle(
@@ -100,7 +100,7 @@ def learning_rate_plot_path(
     artifacts_dir: Path,
     seed: int,
     condition_key: str,
-    plot_variant: PlotVariant = "anchored_t1",
+    plot_variant: PlotVariant = "anchored_t0",
 ) -> Path:
     """Return the PNG path for one condition's learning-rate plot."""
     safe_name = condition_key.replace("/", "__")
@@ -120,15 +120,15 @@ def save_learning_rate_plot(
     exceeds_hst_bound: bool | None = None,
     convergence_warning: bool = False,
     convergence_warning_threshold: float = DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
-    plot_variant: PlotVariant = "anchored_t1",
-    fit_anchor: FitAnchor | None = "t1",
+    plot_variant: PlotVariant = "anchored_t0",
+    fit_anchor: FitAnchor | None = "t0",
 ) -> Path:
     """
     Render a dual-panel decay plot for one condition.
 
-    Default fit_anchor is t1: GAT fit and HST reference both pass through empirical
-    epsilon(1) and share fitted epsilon_inf. Curves are drawn over the full empirical
-    series; the fit-window marker shows where beta was estimated.
+    Default fit_anchor is t0: GAT fit and HST reference both use prior epsilon(0)=0.5
+    at round 0 and share fitted epsilon_inf. Curves span the full empirical series;
+    the fit-window marker shows where beta was estimated.
     """
     import matplotlib
 
