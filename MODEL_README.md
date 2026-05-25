@@ -102,9 +102,9 @@ From trained models:
   - fit uses discrete test indices `t = 1..T`
   - primary method: `scipy.optimize.curve_fit`
   - fallback: log-linear fit when scipy fit fails
-- generate `anchored_t1` learning-rate plots per condition (default **fit-anchor `t1`**, empirical `epsilon(1)` at round 1):
+- generate `anchored_t1` learning-rate plots per condition (default **fit-anchor `t1`** for GAT fit and HST reference):
   - GAT and HST curves pass through empirical `epsilon(1)` and share fitted `epsilon_inf`
-  - HST reference decays with `beta_HST_max`
+  - HST reference decays with `beta_HST_max`; both curves span the full plotted horizon at save time
   - optional **fit-anchor `t0`**: prior `epsilon(0)=0.5` for manual replay only (`plot_learning_rate_from_logs.py --fit-anchor t0`, suffix `__anchored_t0`)
 
 Bound comparison:

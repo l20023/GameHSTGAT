@@ -151,6 +151,7 @@ def run_single_seed(
                     exceeds_hst_bound=result.exceeds_hst_bound,
                     convergence_warning=result.convergence_warning,
                     plot_variant="anchored_t1",
+                    fit_anchor="t1",
                 )
                 condition_metrics["learning_rate_plot"] = str(anchored_t1_plot_path)
                 condition_metrics["learning_rate_plot_anchored_t1"] = str(anchored_t1_plot_path)

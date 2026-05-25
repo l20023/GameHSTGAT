@@ -209,6 +209,7 @@ Learning-rate plots use the default **fit-anchor `t1`** (`__anchored_t1` filenam
 - Fit model: `epsilon(t) = (epsilon(1) - epsilon_inf) * exp(-beta * (t-1)) + epsilon_inf` for `t = 1..T`.
 - `epsilon(1)` is the **empirical** test error at round 1 (agents already use private signals); the curve passes through that point exactly.
 - GAT and HST reference curves share fitted `epsilon_inf` and the same `epsilon(1)`; HST uses `beta_HST_max` (max permitted slope, not a forecast).
+- Both curves are drawn over the **full** empirical series when plots are generated; the grey fit-window marker shows where beta was estimated.
 - **Log panel:** `epsilon(t) - epsilon_inf` with the same `t=1` anchor for slope comparison.
 
 **Fit-anchor `t0`** (sensitivity only, not the pipeline default): prior `epsilon(0)=0.5` at round 0,

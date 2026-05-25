@@ -49,12 +49,14 @@ def test_build_suptitle_shows_fit_failed() -> None:
 @pytest.mark.parametrize("plot_variant", ["anchored_t1", "anchored_t0"])
 def test_save_learning_rate_plot_writes_png(tmp_path: Path, plot_variant: str) -> None:
     epsilon_series = [0.4, 0.25, 0.15, 0.1, 0.08]
+    anchor = "t0" if plot_variant == "anchored_t0" else "t1"
     beta_fit = {
         "alpha": 0.45,
         "beta": 0.3,
         "epsilon_inf": 0.05,
         "fit_success": True,
-        "method": "scipy_anchored_t1",
+        "method": f"scipy_anchored_{anchor}",
+        "fit_anchor": anchor,
     }
     output_path = tmp_path / f"plot_{plot_variant}.png"
     save_learning_rate_plot(
@@ -68,6 +70,7 @@ def test_save_learning_rate_plot_writes_png(tmp_path: Path, plot_variant: str) -
         exceeds_hst_bound=False,
         convergence_warning=False,
         plot_variant=plot_variant,  # type: ignore[arg-type]
+        fit_anchor=anchor,  # type: ignore[arg-type]
     )
 
 
