@@ -75,6 +75,34 @@ def _finite_float(value: Any) -> float | None:
     return numeric
 
 
+def _consensus_record_fields(metrics: dict[str, Any]) -> dict[str, float | None]:
+    """Flatten unanimous/majority consensus scalars for tabular export."""
+    fields: dict[str, float | None] = {}
+    consensus = metrics.get("consensus", {})
+    if not isinstance(consensus, dict):
+        return fields
+    for mode in ("unanimous", "majority"):
+        mode_metrics = consensus.get(mode, {})
+        if not isinstance(mode_metrics, dict):
+            continue
+        fields[f"{mode}_reach_consensus_rate"] = _finite_float(
+            mode_metrics.get("fraction_episodes_reach_consensus")
+        )
+        fields[f"{mode}_correct_consensus_rate"] = _finite_float(
+            mode_metrics.get("fraction_episodes_consensus_correct")
+        )
+        fields[f"{mode}_wrong_only_consensus_rate"] = _finite_float(
+            mode_metrics.get("fraction_episodes_consensus_wrong_only")
+        )
+        fields[f"{mode}_correct_at_first_consensus_rate"] = _finite_float(
+            mode_metrics.get("fraction_correct_at_first_consensus")
+        )
+        fields[f"{mode}_mean_first_consensus_t"] = _finite_float(
+            mode_metrics.get("mean_first_consensus_t")
+        )
+    return fields
+
+
 def discover_metrics_files(root: Path) -> list[Path]:
     return sorted(root.rglob("metrics.json"))
 
@@ -140,6 +168,7 @@ def load_metrics_records(metrics_path: Path) -> list[dict[str, Any]]:
                 "train_loss_final": _finite_float(metrics.get("train_loss_final")),
                 "layout": path_ctx["layout"],
                 "metrics_path": str(metrics_path),
+                **_consensus_record_fields(metrics),
             }
         )
 
@@ -168,6 +197,14 @@ AGGREGATE_COLUMNS = [
     "convergence_warning_rate",
     "fit_success_rate",
     "fit_r2_mean",
+    "unanimous_reach_consensus_rate_mean",
+    "unanimous_correct_consensus_rate_mean",
+    "unanimous_wrong_only_consensus_rate_mean",
+    "unanimous_mean_first_consensus_t_mean",
+    "majority_reach_consensus_rate_mean",
+    "majority_correct_consensus_rate_mean",
+    "majority_wrong_only_consensus_rate_mean",
+    "majority_mean_first_consensus_t_mean",
 ]
 
 
@@ -177,6 +214,17 @@ def _std(values: list[float]) -> float | None:
     mean = sum(values) / len(values)
     variance = sum((value - mean) ** 2 for value in values) / (len(values) - 1)
     return math.sqrt(variance)
+
+
+def _mean_field(group: list[dict[str, Any]], field: str) -> float | None:
+    values = [
+        float(item[field])
+        for item in group
+        if isinstance(item.get(field), (int, float)) and math.isfinite(float(item[field]))
+    ]
+    if not values:
+        return None
+    return sum(values) / len(values)
 
 
 def _best_run_by_beta_gat(group: list[dict[str, Any]]) -> dict[str, Any]:
@@ -336,6 +384,30 @@ def aggregate_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     else None
                 ),
                 "fit_r2_mean": sum(r2_values) / len(r2_values) if r2_values else None,
+                "unanimous_reach_consensus_rate_mean": _mean_field(
+                    group, "unanimous_reach_consensus_rate"
+                ),
+                "unanimous_correct_consensus_rate_mean": _mean_field(
+                    group, "unanimous_correct_consensus_rate"
+                ),
+                "unanimous_wrong_only_consensus_rate_mean": _mean_field(
+                    group, "unanimous_wrong_only_consensus_rate"
+                ),
+                "unanimous_mean_first_consensus_t_mean": _mean_field(
+                    group, "unanimous_mean_first_consensus_t"
+                ),
+                "majority_reach_consensus_rate_mean": _mean_field(
+                    group, "majority_reach_consensus_rate"
+                ),
+                "majority_correct_consensus_rate_mean": _mean_field(
+                    group, "majority_correct_consensus_rate"
+                ),
+                "majority_wrong_only_consensus_rate_mean": _mean_field(
+                    group, "majority_wrong_only_consensus_rate"
+                ),
+                "majority_mean_first_consensus_t_mean": _mean_field(
+                    group, "majority_mean_first_consensus_t"
+                ),
             }
         )
     return aggregated
@@ -369,6 +441,14 @@ TABLE_COLUMNS = [
     "fit_rmse",
     "fit_r2",
     "train_loss_final",
+    "unanimous_reach_consensus_rate",
+    "unanimous_correct_consensus_rate",
+    "unanimous_wrong_only_consensus_rate",
+    "unanimous_mean_first_consensus_t",
+    "majority_reach_consensus_rate",
+    "majority_correct_consensus_rate",
+    "majority_wrong_only_consensus_rate",
+    "majority_mean_first_consensus_t",
     "condition_key",
     "metrics_path",
 ]

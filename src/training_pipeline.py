@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass
 from typing import Any
 
@@ -57,6 +58,7 @@ class ConditionRunResult:
 
     train_loss_history: list[float]
     epsilon_series: list[float]
+    consensus: dict[str, Any]
     beta_fit: dict[str, float | bool | str]
     beta_hst_max: float
     beta_gap: float | None
@@ -296,6 +298,189 @@ def train_condition_model(
     )
 
 
+def _consensus_flags_at_timestep(
+    predictions_t: torch.Tensor, *, theta: int, num_nodes: int
+) -> dict[str, bool | float]:
+    """Per-timestep unanimous/majority consensus and agreement fraction."""
+    counts = torch.bincount(predictions_t.to(torch.int64), minlength=2).to(torch.float64)
+    max_count = float(counts.max().item())
+    agreement_fraction = max_count / float(num_nodes)
+    unanimous = bool(predictions_t.min().item() == predictions_t.max().item())
+    majority = max_count > (num_nodes / 2.0)
+    unanimous_label = int(predictions_t[0].item()) if unanimous else -1
+    majority_label = int(counts.argmax().item()) if majority else -1
+    return {
+        "unanimous": unanimous,
+        "unanimous_correct": unanimous and unanimous_label == theta,
+        "unanimous_wrong": unanimous and unanimous_label != theta,
+        "majority": majority,
+        "majority_correct": majority and majority_label == theta,
+        "majority_wrong": majority and majority_label != theta,
+        "agreement_fraction": agreement_fraction,
+    }
+
+
+def _new_consensus_mode_accumulator(max_horizon: int) -> dict[str, Any]:
+    return {
+        "reach_episodes": 0,
+        "correct_episodes": 0,
+        "wrong_only_episodes": 0,
+        "first_correct_count": 0,
+        "first_consensus_times": [],
+        "consensus_at_t": [0] * max_horizon,
+        "correct_at_t": [0] * max_horizon,
+        "wrong_at_t": [0] * max_horizon,
+        "agreement_sum_at_t": [0.0] * max_horizon,
+    }
+
+
+def _update_consensus_mode_accumulator(
+    accumulator: dict[str, Any],
+    *,
+    max_horizon: int,
+    flags_per_t: list[dict[str, bool | float]],
+    mode: str,
+) -> None:
+    reached = False
+    ever_correct = False
+    first_consensus_t: int | None = None
+    first_consensus_correct = False
+
+    for t_idx, flags in enumerate(flags_per_t):
+        has_consensus = bool(flags[mode])
+        if has_consensus:
+            reached = True
+            if first_consensus_t is None:
+                first_consensus_t = t_idx + 1
+                first_consensus_correct = bool(flags[f"{mode}_correct"])
+            if flags[f"{mode}_correct"]:
+                ever_correct = True
+            accumulator["consensus_at_t"][t_idx] += 1
+            if flags[f"{mode}_correct"]:
+                accumulator["correct_at_t"][t_idx] += 1
+            if flags[f"{mode}_wrong"]:
+                accumulator["wrong_at_t"][t_idx] += 1
+        accumulator["agreement_sum_at_t"][t_idx] += float(flags["agreement_fraction"])
+
+    if reached:
+        accumulator["reach_episodes"] += 1
+        if ever_correct:
+            accumulator["correct_episodes"] += 1
+        else:
+            accumulator["wrong_only_episodes"] += 1
+        if first_consensus_t is not None:
+            accumulator["first_consensus_times"].append(first_consensus_t)
+            if first_consensus_correct:
+                accumulator["first_correct_count"] += 1
+
+
+def _finalize_consensus_mode_metrics(
+    accumulator: dict[str, Any],
+    *,
+    test_episodes: int,
+    max_horizon: int,
+    include_series: bool,
+) -> dict[str, Any]:
+    test_episodes_f = float(test_episodes)
+    first_times = accumulator["first_consensus_times"]
+    reach = int(accumulator["reach_episodes"])
+    metrics: dict[str, Any] = {
+        "fraction_episodes_reach_consensus": reach / test_episodes_f,
+        "fraction_episodes_consensus_correct": int(accumulator["correct_episodes"]) / test_episodes_f,
+        "fraction_episodes_consensus_wrong_only": int(accumulator["wrong_only_episodes"])
+        / test_episodes_f,
+        "fraction_correct_at_first_consensus": (
+            float(accumulator["first_correct_count"]) / float(reach) if reach > 0 else None
+        ),
+        "mean_first_consensus_t": (
+            float(sum(first_times)) / float(len(first_times)) if first_times else None
+        ),
+        "median_first_consensus_t": (
+            float(statistics.median(first_times)) if first_times else None
+        ),
+    }
+    if include_series:
+        metrics["consensus_rate_series"] = [
+            count / test_episodes_f for count in accumulator["consensus_at_t"]
+        ]
+        metrics["correct_consensus_rate_series"] = [
+            count / test_episodes_f for count in accumulator["correct_at_t"]
+        ]
+        metrics["wrong_consensus_rate_series"] = [
+            count / test_episodes_f for count in accumulator["wrong_at_t"]
+        ]
+        metrics["agreement_fraction_series"] = [
+            total / test_episodes_f for total in accumulator["agreement_sum_at_t"]
+        ]
+    return metrics
+
+
+def evaluate_test_episodes(
+    *,
+    model: RecurrentGATAgent,
+    graph_data: Data,
+    test_episodes: int,
+    max_horizon: int,
+    signal_quality: float,
+    seed: int,
+    device: torch.device,
+    include_consensus_series: bool = False,
+) -> tuple[list[float], dict[str, Any]]:
+    """Evaluate epsilon(t) and consensus metrics in one test pass per episode."""
+    num_nodes = int(graph_data.num_nodes)
+    signal_generator = PrivateSignalGenerator(signal_quality=signal_quality, default_seed=seed)
+    error_counts = torch.zeros(max_horizon, dtype=torch.float64, device=device)
+    total_predictions_per_t = float(test_episodes * num_nodes)
+    graph_data_device = graph_data.to(device)
+    unanimous_acc = _new_consensus_mode_accumulator(max_horizon)
+    majority_acc = _new_consensus_mode_accumulator(max_horizon)
+
+    model.eval()
+    with torch.no_grad():
+        for episode_idx in range(test_episodes):
+            episode = signal_generator.generate_episode(
+                num_nodes=num_nodes,
+                max_horizon=max_horizon,
+                seed=_episode_seed(seed, episode_idx, offset=TEST_EPISODE_OFFSET),
+            )
+            theta = int(episode["theta"])
+            x_sequences, targets = _episode_to_model_inputs(
+                episode, num_nodes=num_nodes, device=device
+            )
+            all_logits = model(x_sequences, graph_data_device.edge_index, max_horizon=max_horizon)
+            predictions = all_logits.argmax(dim=-1)  # [T, N]
+            errors_per_t = (predictions != targets.unsqueeze(0)).sum(dim=1).to(torch.float64)
+            error_counts += errors_per_t
+
+            flags_per_t = [
+                _consensus_flags_at_timestep(predictions[t], theta=theta, num_nodes=num_nodes)
+                for t in range(max_horizon)
+            ]
+            _update_consensus_mode_accumulator(
+                unanimous_acc, max_horizon=max_horizon, flags_per_t=flags_per_t, mode="unanimous"
+            )
+            _update_consensus_mode_accumulator(
+                majority_acc, max_horizon=max_horizon, flags_per_t=flags_per_t, mode="majority"
+            )
+
+    epsilon = (error_counts / total_predictions_per_t).cpu().tolist()
+    consensus = {
+        "unanimous": _finalize_consensus_mode_metrics(
+            unanimous_acc,
+            test_episodes=test_episodes,
+            max_horizon=max_horizon,
+            include_series=include_consensus_series,
+        ),
+        "majority": _finalize_consensus_mode_metrics(
+            majority_acc,
+            test_episodes=test_episodes,
+            max_horizon=max_horizon,
+            include_series=include_consensus_series,
+        ),
+    }
+    return epsilon, consensus
+
+
 def compute_epsilon_series(
     *,
     model: RecurrentGATAgent,
@@ -307,30 +492,17 @@ def compute_epsilon_series(
     device: torch.device,
 ) -> list[float]:
     """Evaluate error rate epsilon(t) across test episodes and nodes."""
-    num_nodes = int(graph_data.num_nodes)
-    signal_generator = PrivateSignalGenerator(signal_quality=signal_quality, default_seed=seed)
-    error_counts = torch.zeros(max_horizon, dtype=torch.float64, device=device)
-    total_predictions_per_t = float(test_episodes * num_nodes)
-    graph_data_device = graph_data.to(device)
-
-    model.eval()
-    with torch.no_grad():
-        for episode_idx in range(test_episodes):
-            episode = signal_generator.generate_episode(
-                num_nodes=num_nodes,
-                max_horizon=max_horizon,
-                seed=_episode_seed(seed, episode_idx, offset=TEST_EPISODE_OFFSET),
-            )
-            x_sequences, targets = _episode_to_model_inputs(
-                episode, num_nodes=num_nodes, device=device
-            )
-            all_logits = model(x_sequences, graph_data_device.edge_index, max_horizon=max_horizon)
-            predictions = all_logits.argmax(dim=-1)  # [T, N]
-            errors_per_t = (predictions != targets.unsqueeze(0)).sum(dim=1).to(torch.float64)
-            error_counts += errors_per_t
-
-    epsilon = (error_counts / total_predictions_per_t).cpu()
-    return epsilon.tolist()
+    epsilon_series, _ = evaluate_test_episodes(
+        model=model,
+        graph_data=graph_data,
+        test_episodes=test_episodes,
+        max_horizon=max_horizon,
+        signal_quality=signal_quality,
+        seed=seed,
+        device=device,
+        include_consensus_series=False,
+    )
+    return epsilon_series
 
 
 def exponential_decay_values(
@@ -375,64 +547,38 @@ def _fit_quality_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float,
 
 
 WALD_CI_Z = 1.959963984540054  # 95% normal-approx z-score
-PLATEAU_TOLERANCE = 0.05  # plateau threshold as fraction of initial decay range
+PERFECT_ERROR_TOLERANCE = 0.0  # epsilon(t) at or below this counts as perfect
 PLATEAU_MIN_FIT_POINTS = 5  # minimum number of points required to fit
-PLATEAU_CONSECUTIVE_BELOW = 3  # consecutive sub-threshold points needed
 
 
 def _detect_fit_window(
     y: np.ndarray,
     *,
-    plateau_tolerance: float = PLATEAU_TOLERANCE,
+    perfect_error_tolerance: float = PERFECT_ERROR_TOLERANCE,
     min_fit_points: int = PLATEAU_MIN_FIT_POINTS,
-    consecutive_below: int = PLATEAU_CONSECUTIVE_BELOW,
 ) -> int:
     """
-    Find the maximum t index to use for an exponential decay fit before
-    epsilon(t) plateaus near epsilon_inf.
+    Find the number of leading points to use for an exponential decay fit.
 
-    A plateau is only declared when ALL of the following hold:
-    1. The tail (last 10% of points) is itself approximately flat
-       (variation in the tail < plateau_tolerance * total decay range).
-    2. There are `consecutive_below` consecutive points below the threshold
-       `eps_inf_estimate + plateau_tolerance * decay_range`. This protects
-       against single noisy outlier points triggering a premature cutoff.
-    3. The window keeps at least `min_fit_points` leading points for the fit.
-
-    Returns the number of leading points to include. A return value < n
-    indicates a plateau was detected.
+    Excludes only a trailing suffix where every point has perfect error rate
+    (epsilon(t) <= perfect_error_tolerance). Low but non-zero error plateaus
+    are never auto-truncated.
     """
     n = len(y)
     if n <= min_fit_points:
         return n
-    tail_size = max(3, n // 10)
-    tail = y[-tail_size:]
-    eps_inf_estimate = float(np.median(tail))
-    decay_range = float(y[0]) - eps_inf_estimate
-    if decay_range <= 0.0:
-        return n
-    # Require the tail itself to be approximately flat (still-decaying tails
-    # would make eps_inf_estimate biased and produce false plateau signals).
-    tail_decay = float(tail[0] - tail[-1])
-    if tail_decay > plateau_tolerance * decay_range:
-        return n
-    threshold = eps_inf_estimate + plateau_tolerance * decay_range
-    streak = 0
-    plateau_start: int | None = None
-    for i in range(n):
-        if float(y[i]) < threshold:
-            streak += 1
-            if streak >= consecutive_below:
-                plateau_start = i - consecutive_below + 1
-                break
+    perfect_suffix_start = n
+    for i in range(n - 1, -1, -1):
+        if float(y[i]) <= perfect_error_tolerance:
+            perfect_suffix_start = i
         else:
-            streak = 0
-    if plateau_start is None:
+            break
+    if perfect_suffix_start >= n:
         return n
-    window_size = plateau_start + 1
-    if window_size < min_fit_points:
+    window = perfect_suffix_start
+    if window < min_fit_points:
         return n
-    return window_size
+    return window
 
 
 def _finalize_fit_result(
@@ -586,12 +732,16 @@ def _empty_fit_result(method: str, failure_reason: str) -> dict[str, float | boo
     }
 
 
-def fit_beta_from_epsilon(epsilon_series: list[float]) -> dict[str, float | bool | str]:
+def fit_beta_from_epsilon(
+    epsilon_series: list[float],
+    *,
+    fit_window_t_max: int | None = None,
+) -> dict[str, float | bool | str]:
     """Fit anchored epsilon(t) with epsilon(0)=0.5 and robust fallback.
 
-    Uses a slope-based plateau cutoff to truncate trailing flat data points
-    before fitting. The full series is still stored as `n_full_series` and the
-    truncation length as `fit_window_t_max` in the returned dict.
+    When `fit_window_t_max` is None, auto-truncates only a trailing suffix of
+    perfect-error rounds (epsilon=0). Pass an explicit window to override (e.g.
+    from replay plotting). The full series is stored as `n_full_series`.
     """
     if len(epsilon_series) < 3:
         return _empty_fit_result("insufficient_points", "insufficient_points")
@@ -601,7 +751,10 @@ def fit_beta_from_epsilon(epsilon_series: list[float]) -> dict[str, float | bool
         return _empty_fit_result("non_finite_input", "non_finite_input")
 
     n_full = len(y_full)
-    window = _detect_fit_window(y_full)
+    if fit_window_t_max is None:
+        window = _detect_fit_window(y_full)
+    else:
+        window = min(max(1, int(fit_window_t_max)), n_full)
     plateau_detected = window < n_full
     y = y_full[:window]
     t = np.arange(1, len(y) + 1, dtype=float)
@@ -659,6 +812,7 @@ def run_condition_experiment(
     weight_decay: float = DEFAULT_WEIGHT_DECAY,
     validation_episodes: int = DEFAULT_VALIDATION_EPISODES,
     validation_eval_every: int = DEFAULT_VALIDATION_EVAL_EVERY,
+    include_consensus_series: bool = False,
 ) -> ConditionRunResult:
     """Run train + eval + beta fit for one graph condition."""
     train_outcome = train_condition_model(
@@ -678,7 +832,7 @@ def run_condition_experiment(
         validation_episodes=validation_episodes,
         validation_eval_every=validation_eval_every,
     )
-    epsilon_series = compute_epsilon_series(
+    epsilon_series, consensus = evaluate_test_episodes(
         model=train_outcome.model,
         graph_data=graph_data,
         test_episodes=test_episodes,
@@ -686,6 +840,7 @@ def run_condition_experiment(
         signal_quality=signal_quality,
         seed=seed,
         device=device,
+        include_consensus_series=include_consensus_series,
     )
     if disable_beta_fit:
         beta_fit: dict[str, float | bool | str] = _empty_fit_result("disabled", "disabled")
@@ -713,6 +868,7 @@ def run_condition_experiment(
     return ConditionRunResult(
         train_loss_history=train_outcome.train_loss_history,
         epsilon_series=epsilon_series,
+        consensus=consensus,
         beta_fit=beta_fit,
         beta_hst_max=beta_hst_max,
         beta_gap=beta_gap,
@@ -727,11 +883,37 @@ def run_condition_experiment(
     )
 
 
+_CONSENSUS_SERIES_KEYS = (
+    "consensus_rate_series",
+    "correct_consensus_rate_series",
+    "wrong_consensus_rate_series",
+    "agreement_fraction_series",
+)
+
+
+def consensus_to_dict(
+    consensus: dict[str, Any], *, save_consensus_series: bool = False
+) -> dict[str, Any]:
+    """Serialize consensus metrics; time series are optional."""
+    serialized: dict[str, Any] = {}
+    for mode in ("unanimous", "majority"):
+        mode_metrics = consensus.get(mode, {})
+        if not isinstance(mode_metrics, dict):
+            continue
+        mode_payload = dict(mode_metrics)
+        if not save_consensus_series:
+            for key in _CONSENSUS_SERIES_KEYS:
+                mode_payload.pop(key, None)
+        serialized[mode] = mode_payload
+    return serialized
+
+
 def condition_result_to_dict(
     result: ConditionRunResult,
     *,
     save_train_loss_history: bool = False,
     save_epsilon_series: bool = False,
+    save_consensus_series: bool = False,
 ) -> dict[str, Any]:
     """Convert dataclass result to JSON-serializable dictionary."""
     payload: dict[str, Any] = {
@@ -742,6 +924,9 @@ def condition_result_to_dict(
         "best_validation_error": result.best_validation_error,
         "best_validation_episode_idx": result.best_validation_episode_idx,
         "validation_history": result.validation_history,
+        "consensus": consensus_to_dict(
+            result.consensus, save_consensus_series=save_consensus_series
+        ),
         "beta_fit": result.beta_fit,
         "beta_hst_max": result.beta_hst_max,
         "beta_gap": result.beta_gap,
@@ -759,7 +944,9 @@ __all__ = [
     "ConditionRunResult",
     "TrainOutcome",
     "condition_result_to_dict",
+    "consensus_to_dict",
     "compute_epsilon_series",
+    "evaluate_test_episodes",
     "anchored_t0_decay_values",
     "exponential_decay_values",
     "fit_beta_from_epsilon",

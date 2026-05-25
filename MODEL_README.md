@@ -113,6 +113,12 @@ Bound comparison:
   - `exceeds_hst_bound` (when fit succeeds)
   - `convergence_warning` (true when fitted `epsilon_inf > 0.05`)
 
+Consensus diagnostics (test eval, per condition, both modes in `metrics.json` → `consensus`):
+- **unanimous:** all agents share the same prediction at step `t`
+- **majority:** strict majority (`max(count) > N/2`) agrees on one label
+- episode scalars (per mode): reach rate, correct-consensus rate, wrong-only rate, correct-at-first-consensus, mean/median first consensus time
+- optional time series when `save_consensus_series: true` (rates per `t` plus mean agreement fraction)
+
 Design choice:
 - keep theoretical function in one module so theory updates remain isolated.
 

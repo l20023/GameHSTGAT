@@ -79,6 +79,10 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
                 "beta_gap": -0.51,
                 "exceeds_hst_bound": False,
                 "convergence_warning": False,
+                "consensus": {
+                    "unanimous": {"fraction_episodes_reach_consensus": 0.5},
+                    "majority": {"fraction_episodes_reach_consensus": 0.8},
+                },
                 "train_loss_running_mean_final": 0.123,
                 "best_running_mean_loss": 0.1,
                 "best_episode_idx": 0,
@@ -133,6 +137,7 @@ def test_run_single_seed_logs_wandb_and_keeps_local_artifacts(tmp_path, monkeypa
         disable_beta_fit=False,
         save_train_loss_history=False,
         save_epsilon_series=False,
+        save_consensus_series=False,
         save_learning_rate_plots=True,
     )
 

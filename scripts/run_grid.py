@@ -64,6 +64,7 @@ def run_grid_experiments(
     disable_beta_fit: bool,
     save_train_loss_history: bool,
     save_epsilon_series: bool,
+    save_consensus_series: bool,
     save_learning_rate_plots: bool,
     train_episodes_per_n: dict[int, int] | None = None,
 ) -> dict[str, Any]:
@@ -111,6 +112,7 @@ def run_grid_experiments(
             disable_beta_fit=disable_beta_fit,
             save_train_loss_history=save_train_loss_history,
             save_epsilon_series=save_epsilon_series,
+            save_consensus_series=save_consensus_series,
             save_learning_rate_plots=save_learning_rate_plots,
         )
         run_summaries.append(
@@ -153,6 +155,7 @@ def run_grid_experiments(
             "disable_beta_fit": disable_beta_fit,
             "save_train_loss_history": save_train_loss_history,
             "save_epsilon_series": save_epsilon_series,
+            "save_consensus_series": save_consensus_series,
             "save_learning_rate_plots": save_learning_rate_plots,
             "wandb_project": wandb_project,
             "wandb_entity": wandb_entity,
@@ -253,6 +256,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disable-beta-fit", action="store_true")
     parser.add_argument("--save-train-loss-history", action="store_true")
     parser.add_argument("--save-epsilon-series", action="store_true")
+    parser.add_argument("--save-consensus-series", action="store_true")
     parser.add_argument("--no-learning-rate-plots", action="store_true")
     return parser.parse_args()
 
@@ -282,6 +286,9 @@ def resolve_run_config(args: argparse.Namespace) -> dict[str, Any]:
             True if getattr(args, "save_train_loss_history", False) else None
         ),
         "save_epsilon_series": True if getattr(args, "save_epsilon_series", False) else None,
+        "save_consensus_series": (
+            True if getattr(args, "save_consensus_series", False) else None
+        ),
         "save_learning_rate_plots": (
             False if getattr(args, "no_learning_rate_plots", False) else None
         ),
@@ -335,6 +342,7 @@ def main() -> None:
         disable_beta_fit=bool(run_config["disable_beta_fit"]),
         save_train_loss_history=bool(run_config["save_train_loss_history"]),
         save_epsilon_series=bool(run_config["save_epsilon_series"]),
+        save_consensus_series=bool(run_config["save_consensus_series"]),
         save_learning_rate_plots=bool(run_config["save_learning_rate_plots"]),
         train_episodes_per_n=train_episodes_per_n,
     )

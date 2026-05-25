@@ -56,6 +56,7 @@ DEFAULT_RUN_CONFIG: dict[str, Any] = {
     "disable_beta_fit": False,
     "save_train_loss_history": False,
     "save_epsilon_series": True,
+    "save_consensus_series": False,
     "save_learning_rate_plots": True,
 }
 
@@ -95,6 +96,7 @@ def run_single_seed(
     disable_beta_fit: bool,
     save_train_loss_history: bool,
     save_epsilon_series: bool,
+    save_consensus_series: bool,
     save_learning_rate_plots: bool,
 ) -> dict:
     """Run full train/eval pipeline for one seed across all graph conditions."""
@@ -127,6 +129,7 @@ def run_single_seed(
         "disable_beta_fit": disable_beta_fit,
         "save_train_loss_history": save_train_loss_history,
         "save_epsilon_series": save_epsilon_series,
+        "save_consensus_series": save_consensus_series,
         "save_learning_rate_plots": save_learning_rate_plots,
     }
     wandb_run = init_wandb_run(
@@ -160,11 +163,13 @@ def run_single_seed(
                     seed=seed,
                     device=resolved_device,
                     disable_beta_fit=disable_beta_fit,
+                    include_consensus_series=save_consensus_series,
                 )
                 condition_metrics = condition_result_to_dict(
                     result,
                     save_train_loss_history=save_train_loss_history,
                     save_epsilon_series=save_epsilon_series,
+                    save_consensus_series=save_consensus_series,
                 )
                 if save_learning_rate_plots:
                     anchored_t0_plot_path = learning_rate_plot_path(
@@ -394,6 +399,11 @@ def parse_args() -> argparse.Namespace:
         help="Persist full epsilon(t) arrays in metrics.json.",
     )
     parser.add_argument(
+        "--save-consensus-series",
+        action="store_true",
+        help="Persist consensus time-series arrays in metrics.json.",
+    )
+    parser.add_argument(
         "--no-learning-rate-plots",
         action="store_true",
         help="Disable PNG learning-rate plots under seed_<id>/plots/.",
@@ -430,6 +440,9 @@ def resolve_run_config(args: argparse.Namespace) -> dict[str, Any]:
             True if getattr(args, "save_train_loss_history", False) else None
         ),
         "save_epsilon_series": True if getattr(args, "save_epsilon_series", False) else None,
+        "save_consensus_series": (
+            True if getattr(args, "save_consensus_series", False) else None
+        ),
         "save_learning_rate_plots": (
             False if getattr(args, "no_learning_rate_plots", False) else None
         ),
@@ -486,6 +499,7 @@ def main() -> None:
         disable_beta_fit=bool(run_config["disable_beta_fit"]),
         save_train_loss_history=bool(run_config["save_train_loss_history"]),
         save_epsilon_series=bool(run_config["save_epsilon_series"]),
+        save_consensus_series=bool(run_config["save_consensus_series"]),
         save_learning_rate_plots=bool(run_config["save_learning_rate_plots"]),
     )
     print(

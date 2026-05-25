@@ -98,6 +98,7 @@ def build_grid_config_snapshot(
         "disable_beta_fit": bool(run_config["disable_beta_fit"]),
         "save_train_loss_history": bool(run_config["save_train_loss_history"]),
         "save_epsilon_series": bool(run_config["save_epsilon_series"]),
+        "save_consensus_series": bool(run_config["save_consensus_series"]),
         "save_learning_rate_plots": bool(run_config["save_learning_rate_plots"]),
         "wandb_project": str(run_config["wandb_project"]),
         "wandb_entity": run_config["wandb_entity"],

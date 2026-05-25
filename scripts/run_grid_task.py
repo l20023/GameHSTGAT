@@ -48,6 +48,9 @@ def resolve_grid_context(args: argparse.Namespace) -> dict[str, Any]:
             True if getattr(args, "save_train_loss_history", False) else None
         ),
         "save_epsilon_series": True if getattr(args, "save_epsilon_series", False) else None,
+        "save_consensus_series": (
+            True if getattr(args, "save_consensus_series", False) else None
+        ),
         "save_learning_rate_plots": (
             False if getattr(args, "no_learning_rate_plots", False) else None
         ),
@@ -130,6 +133,7 @@ def run_grid_task(
         disable_beta_fit=bool(run_config["disable_beta_fit"]),
         save_train_loss_history=bool(run_config["save_train_loss_history"]),
         save_epsilon_series=bool(run_config["save_epsilon_series"]),
+        save_consensus_series=bool(run_config["save_consensus_series"]),
         save_learning_rate_plots=bool(run_config["save_learning_rate_plots"]),
     )
     return {

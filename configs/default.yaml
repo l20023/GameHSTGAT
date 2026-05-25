@@ -33,4 +33,5 @@ disable_beta_fit: false
 
 save_train_loss_history: false
 save_epsilon_series: true
+save_consensus_series: false
 save_learning_rate_plots: true

@@ -46,8 +46,32 @@ def _safe_bool_ratio(values: list[bool]) -> float | None:
     return float(sum(1 for item in values if item) / len(values))
 
 
+def _consensus_record_fields(metrics: dict[str, Any]) -> dict[str, float | None]:
+    fields: dict[str, float | None] = {}
+    consensus = metrics.get("consensus", {})
+    if not isinstance(consensus, dict):
+        return fields
+    for mode in ("unanimous", "majority"):
+        mode_metrics = consensus.get(mode, {})
+        if not isinstance(mode_metrics, dict):
+            continue
+        fields[f"{mode}_reach_consensus_rate"] = _finite_float(
+            mode_metrics.get("fraction_episodes_reach_consensus")
+        )
+        fields[f"{mode}_correct_consensus_rate"] = _finite_float(
+            mode_metrics.get("fraction_episodes_consensus_correct")
+        )
+        fields[f"{mode}_wrong_only_consensus_rate"] = _finite_float(
+            mode_metrics.get("fraction_episodes_consensus_wrong_only")
+        )
+        fields[f"{mode}_mean_first_consensus_t"] = _finite_float(
+            mode_metrics.get("mean_first_consensus_t")
+        )
+    return fields
+
+
 def _new_aggregate_bucket() -> dict[str, Any]:
-    return {
+    bucket: dict[str, Any] = {
         "beta_gat_values": [],
         "beta_gap_values": [],
         "exceeds_values": [],
@@ -56,6 +80,12 @@ def _new_aggregate_bucket() -> dict[str, Any]:
         "artifact_paths": set(),
         "num_records": 0,
     }
+    for mode in ("unanimous", "majority"):
+        bucket[f"{mode}_reach_consensus_values"] = []
+        bucket[f"{mode}_correct_consensus_values"] = []
+        bucket[f"{mode}_wrong_only_consensus_values"] = []
+        bucket[f"{mode}_mean_first_consensus_t_values"] = []
+    return bucket
 
 
 def aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -98,6 +128,20 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
             if isinstance(fit_success, bool):
                 bucket["fit_success_values"].append(fit_success)
 
+            for mode in ("unanimous", "majority"):
+                reach = _finite_float(record.get(f"{mode}_reach_consensus_rate"))
+                if reach is not None:
+                    bucket[f"{mode}_reach_consensus_values"].append(reach)
+                correct = _finite_float(record.get(f"{mode}_correct_consensus_rate"))
+                if correct is not None:
+                    bucket[f"{mode}_correct_consensus_values"].append(correct)
+                wrong_only = _finite_float(record.get(f"{mode}_wrong_only_consensus_rate"))
+                if wrong_only is not None:
+                    bucket[f"{mode}_wrong_only_consensus_values"].append(wrong_only)
+                first_t = _finite_float(record.get(f"{mode}_mean_first_consensus_t"))
+                if first_t is not None:
+                    bucket[f"{mode}_mean_first_consensus_t_values"].append(first_t)
+
             artifact_path = record.get("artifact_path")
             if isinstance(artifact_path, str):
                 bucket["artifact_paths"].add(artifact_path)
@@ -117,6 +161,30 @@ def aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
                     bucket["convergence_warning_values"]
                 ),
                 "fit_success_rate": _safe_bool_ratio(bucket["fit_success_values"]),
+                "unanimous_reach_consensus_rate": _safe_mean(
+                    bucket["unanimous_reach_consensus_values"]
+                ),
+                "unanimous_correct_consensus_rate": _safe_mean(
+                    bucket["unanimous_correct_consensus_values"]
+                ),
+                "unanimous_wrong_only_consensus_rate": _safe_mean(
+                    bucket["unanimous_wrong_only_consensus_values"]
+                ),
+                "unanimous_mean_first_consensus_t": _safe_mean(
+                    bucket["unanimous_mean_first_consensus_t_values"]
+                ),
+                "majority_reach_consensus_rate": _safe_mean(
+                    bucket["majority_reach_consensus_values"]
+                ),
+                "majority_correct_consensus_rate": _safe_mean(
+                    bucket["majority_correct_consensus_values"]
+                ),
+                "majority_wrong_only_consensus_rate": _safe_mean(
+                    bucket["majority_wrong_only_consensus_values"]
+                ),
+                "majority_mean_first_consensus_t": _safe_mean(
+                    bucket["majority_mean_first_consensus_t_values"]
+                ),
                 "artifact_paths": sorted(bucket["artifact_paths"]),
             }
         return finalized
@@ -171,6 +239,7 @@ def metrics_to_record(
         ),
         "fit_success": fit_success if isinstance(fit_success, bool) else None,
         "artifact_path": artifact_path,
+        **_consensus_record_fields(metrics),
     }
 
 

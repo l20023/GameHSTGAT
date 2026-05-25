@@ -75,6 +75,7 @@ def test_run_grid_experiments_aggregates_and_normalizes_conditions(
         disable_beta_fit=False,
         save_train_loss_history=False,
         save_epsilon_series=False,
+        save_consensus_series=False,
         save_learning_rate_plots=False,
     )
 
@@ -136,6 +137,7 @@ def test_run_grid_uses_adaptive_train_episodes_per_n(tmp_path, monkeypatch) -> N
         disable_beta_fit=True,
         save_train_loss_history=False,
         save_epsilon_series=False,
+        save_consensus_series=False,
         save_learning_rate_plots=False,
         train_episodes_per_n={10: 5000, 100: 7000, 1000: 10000},
     )
@@ -189,6 +191,7 @@ def test_run_grid_falls_back_to_train_episodes_when_n_not_in_map(
         disable_beta_fit=True,
         save_train_loss_history=False,
         save_epsilon_series=False,
+        save_consensus_series=False,
         save_learning_rate_plots=False,
         train_episodes_per_n={10: 5000, 100: 7000, 1000: 10000},
     )

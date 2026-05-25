@@ -46,6 +46,48 @@ def log_train_loss_history(
         run.log({metric_key: float(loss_value)}, step=episode_idx)
 
 
+_CONSENSUS_SCALAR_KEYS = (
+    "fraction_episodes_reach_consensus",
+    "fraction_episodes_consensus_correct",
+    "fraction_episodes_consensus_wrong_only",
+    "fraction_correct_at_first_consensus",
+    "mean_first_consensus_t",
+    "median_first_consensus_t",
+)
+
+_CONSENSUS_SERIES_KEYS = (
+    "consensus_rate_series",
+    "correct_consensus_rate_series",
+    "wrong_consensus_rate_series",
+    "agreement_fraction_series",
+)
+
+
+def _append_consensus_payload(
+    payload: dict[str, Any], *, condition_key: str, metrics: dict[str, Any]
+) -> None:
+    consensus = metrics.get("consensus", {})
+    if not isinstance(consensus, dict):
+        return
+    for mode in ("unanimous", "majority"):
+        mode_metrics = consensus.get(mode, {})
+        if not isinstance(mode_metrics, dict):
+            continue
+        prefix = f"{condition_key}/consensus/{mode}"
+        for key in _CONSENSUS_SCALAR_KEYS:
+            value = mode_metrics.get(key)
+            if isinstance(value, (int, float)):
+                payload[f"{prefix}/{key}"] = float(value)
+        for series_key in _CONSENSUS_SERIES_KEYS:
+            series = mode_metrics.get(series_key, [])
+            if not isinstance(series, list):
+                continue
+            series_name = series_key.removesuffix("_series")
+            for t_idx, value in enumerate(series, start=1):
+                if isinstance(value, (int, float)):
+                    payload[f"{prefix}/{series_name}_t/{t_idx}"] = float(value)
+
+
 def log_condition_metrics(
     *,
     run: Any,
@@ -73,6 +115,8 @@ def log_condition_metrics(
     epsilon_series = metrics.get("epsilon_series", [])
     for t, epsilon_t in enumerate(epsilon_series, start=1):
         payload[f"{condition_key}/epsilon_t/{t}"] = float(epsilon_t)
+
+    _append_consensus_payload(payload, condition_key=condition_key, metrics=metrics)
 
     plot_path = metrics.get("learning_rate_plot")
     if isinstance(plot_path, str) and Path(plot_path).is_file():

@@ -6,13 +6,67 @@ import torch
 
 from src.graph_generator import GraphGenerator
 from src.training_pipeline import (
+    _consensus_flags_at_timestep,
+    _finalize_consensus_mode_metrics,
+    _new_consensus_mode_accumulator,
+    _update_consensus_mode_accumulator,
     _detect_fit_window,
     condition_result_to_dict,
+    consensus_to_dict,
     fit_beta_from_epsilon,
     resolve_runtime_device,
     run_condition_experiment,
 )
 import numpy as np
+
+
+def test_consensus_flags_unanimous_and_majority() -> None:
+    preds = torch.tensor([1, 1, 1, 0])
+    flags = _consensus_flags_at_timestep(preds, theta=1, num_nodes=4)
+    assert flags["unanimous"] is False
+    assert flags["majority"] is True
+    assert flags["majority_correct"] is True
+    assert flags["agreement_fraction"] == 0.75
+
+    unanimous_preds = torch.tensor([0, 0, 0, 0])
+    uni_flags = _consensus_flags_at_timestep(unanimous_preds, theta=1, num_nodes=4)
+    assert uni_flags["unanimous"] is True
+    assert uni_flags["unanimous_correct"] is False
+    assert uni_flags["unanimous_wrong"] is True
+
+
+def test_consensus_episode_aggregation() -> None:
+    max_horizon = 3
+    acc = _new_consensus_mode_accumulator(max_horizon)
+    flags_episode = [
+        _consensus_flags_at_timestep(torch.tensor([0, 0]), theta=0, num_nodes=2),
+        _consensus_flags_at_timestep(torch.tensor([1, 1]), theta=0, num_nodes=2),
+        _consensus_flags_at_timestep(torch.tensor([0, 0]), theta=0, num_nodes=2),
+    ]
+    _update_consensus_mode_accumulator(
+        acc, max_horizon=max_horizon, flags_per_t=flags_episode, mode="unanimous"
+    )
+    metrics = _finalize_consensus_mode_metrics(
+        acc, test_episodes=1, max_horizon=max_horizon, include_series=True
+    )
+    assert metrics["fraction_episodes_reach_consensus"] == 1.0
+    assert metrics["fraction_episodes_consensus_correct"] == 1.0
+    assert metrics["mean_first_consensus_t"] == 1.0
+    assert metrics["fraction_correct_at_first_consensus"] == 1.0
+    assert len(metrics["consensus_rate_series"]) == 3
+
+
+def test_consensus_to_dict_omits_series_by_default() -> None:
+    consensus = {
+        "unanimous": {
+            "fraction_episodes_reach_consensus": 0.5,
+            "consensus_rate_series": [0.1, 0.2],
+        },
+        "majority": {"fraction_episodes_reach_consensus": 0.9},
+    }
+    payload = consensus_to_dict(consensus, save_consensus_series=False)
+    assert "consensus_rate_series" not in payload["unanimous"]
+    assert payload["majority"]["fraction_episodes_reach_consensus"] == 0.9
 
 
 def test_fit_beta_from_synthetic_exponential_series() -> None:
@@ -38,14 +92,14 @@ def test_fit_beta_from_synthetic_exponential_series() -> None:
         assert float(fit["beta_ci_lower"]) <= float(fit["beta"]) <= float(fit["beta_ci_upper"])
 
 
-def test_fit_beta_truncates_at_plateau() -> None:
+def test_fit_beta_truncates_at_perfect_error_suffix() -> None:
     alpha = 0.4
     beta = 0.5
     epsilon_inf = 0.02
-    plateau_length = 50
+    perfect_length = 50
     decay_part = [alpha * math.exp(-beta * t) + epsilon_inf for t in range(1, 16)]
-    plateau_part = [epsilon_inf] * plateau_length
-    series = decay_part + plateau_part
+    perfect_part = [0.0] * perfect_length
+    series = decay_part + perfect_part
 
     fit = fit_beta_from_epsilon(series)
     assert fit["fit_success"] is True
@@ -54,6 +108,7 @@ def test_fit_beta_truncates_at_plateau() -> None:
     fit_window = int(fit["fit_window_t_max"])
     assert fit_window < len(series)
     assert fit_window >= 5
+    assert fit_window == len(decay_part)
 
 
 def test_fit_beta_no_plateau_detection_when_decay_continues() -> None:
@@ -67,19 +122,38 @@ def test_fit_beta_no_plateau_detection_when_decay_continues() -> None:
     assert int(fit["fit_window_t_max"]) == len(series)
 
 
-def test_detect_fit_window_resists_single_outlier_below_threshold() -> None:
-    """Single sub-threshold outlier with above-threshold neighbours must not trigger cutoff."""
-    # Tail is flat at 0.0 (clear plateau), preceded by a clear above-threshold
-    # decay region, with one isolated outlier point dipping below threshold.
+def test_detect_fit_window_resists_single_outlier_before_perfect_tail() -> None:
+    """Only a perfect-error suffix is excluded; mid-series outliers are ignored."""
     y = np.array(
         [0.40, 0.30, 0.25, 0.20, 0.15, 0.01, 0.12, 0.10, 0.08, 0.06,
          0.05, 0.04, 0.03, 0.02, 0.01, 0.00, 0.00, 0.00, 0.00, 0.00],
         dtype=float,
     )
     window = _detect_fit_window(y)
-    # The plateau starts around index 14-15. The lone outlier at index 5 must
-    # not cause a cutoff anywhere near that point.
-    assert window > 10, f"Cutoff triggered prematurely: window={window}"
+    assert window == 15, f"Expected cut before perfect tail, got window={window}"
+
+
+def test_detect_fit_window_no_cut_on_nonzero_plateau() -> None:
+    """Low but non-zero error plateaus must not be auto-truncated."""
+    y = np.array(
+        [0.40, 0.30, 0.20, 0.12, 0.08, 0.05, 0.03, 0.02, 0.02, 0.02,
+         0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02],
+        dtype=float,
+    )
+    assert _detect_fit_window(y) == len(y)
+
+
+def test_detect_fit_window_truncates_perfect_suffix() -> None:
+    y = np.array([0.4, 0.35, 0.3, 0.25, 0.2, 0.0, 0.0, 0.0], dtype=float)
+    assert _detect_fit_window(y) == 5
+
+
+def test_fit_beta_respects_manual_fit_window() -> None:
+    series = [0.4, 0.25, 0.15, 0.1, 0.08, 0.07, 0.06]
+    fit = fit_beta_from_epsilon(series, fit_window_t_max=3)
+    assert int(fit["fit_window_t_max"]) == 3
+    assert int(fit["n_full_series"]) == len(series)
+    assert fit["plateau_detected"] is True
 
 
 def test_run_condition_experiment_uses_validation_checkpoint() -> None:
@@ -177,16 +251,29 @@ def test_exceeds_hst_bound_suppressed_under_convergence_warning() -> None:
         assert result.exceeds_hst_bound is False
 
 
-def test_detect_fit_window_finds_plateau_with_consecutive_run() -> None:
-    """Consecutive sub-threshold points should trigger cutoff at the run start."""
+def test_detect_fit_window_no_cut_on_slow_tail() -> None:
+    """Slow exponential decay with negative tail slope must keep the full series."""
+    alpha = 0.4
+    beta = 0.05
+    series = np.array(
+        [alpha * math.exp(-beta * t) for t in range(1, 21)],
+        dtype=float,
+    )
+    window = _detect_fit_window(series)
+    assert window == len(series)
+
+
+def test_detect_fit_window_smoke_like_series() -> None:
+    """Monotonic decay through t=20 must not cut early (smoke-run false positive)."""
     y = np.array(
-        [0.40, 0.30, 0.20, 0.12, 0.08, 0.05, 0.03, 0.02, 0.02, 0.02,
-         0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02],
+        [
+            0.40, 0.36, 0.33, 0.30, 0.27, 0.24, 0.21, 0.19, 0.17, 0.15,
+            0.13, 0.12, 0.10, 0.09, 0.08, 0.07, 0.065, 0.060, 0.055, 0.050,
+        ],
         dtype=float,
     )
     window = _detect_fit_window(y)
-    assert window < len(y)
-    assert window >= 5
+    assert window == len(y), f"Premature cutoff at window={window}"
 
 
 def test_fit_beta_disabled_payload_includes_ci_fields() -> None:
@@ -228,6 +315,32 @@ def test_condition_result_to_dict_omits_heavy_series_by_default() -> None:
     assert "train_loss_history" not in payload
     assert "epsilon_series" not in payload
     assert payload["train_loss_final"] is not None
+
+
+def test_run_condition_experiment_includes_consensus_metrics() -> None:
+    graph = GraphGenerator().generate_complete(10)
+    result = run_condition_experiment(
+        graph_data=graph,
+        train_episodes=2,
+        test_episodes=3,
+        max_horizon=4,
+        signal_quality=0.8,
+        hidden_dim=16,
+        num_heads=2,
+        learning_rate=0.001,
+        seed=19,
+        device=torch.device("cpu"),
+        disable_beta_fit=True,
+    )
+    for mode in ("unanimous", "majority"):
+        mode_metrics = result.consensus[mode]
+        assert 0.0 <= mode_metrics["fraction_episodes_reach_consensus"] <= 1.0
+        assert 0.0 <= mode_metrics["fraction_episodes_consensus_correct"] <= 1.0
+        assert "consensus_rate_series" not in mode_metrics
+
+    payload = condition_result_to_dict(result)
+    assert "consensus" in payload
+    assert "unanimous" in payload["consensus"]
 
 
 def test_run_condition_experiment_outputs_expected_shapes() -> None:
@@ -323,6 +436,26 @@ def test_fit_beta_flags_poor_fit_when_r2_is_very_bad() -> None:
             "negative_beta",
             "epsilon_inf_out_of_range",
         }
+
+
+def test_condition_result_to_dict_includes_consensus_series_when_requested() -> None:
+    graph = GraphGenerator().generate_complete(8)
+    result = run_condition_experiment(
+        graph_data=graph,
+        train_episodes=2,
+        test_episodes=2,
+        max_horizon=3,
+        signal_quality=0.8,
+        hidden_dim=8,
+        num_heads=2,
+        learning_rate=0.001,
+        seed=21,
+        device=torch.device("cpu"),
+        disable_beta_fit=True,
+        include_consensus_series=True,
+    )
+    payload = condition_result_to_dict(result, save_consensus_series=True)
+    assert "consensus_rate_series" in payload["consensus"]["unanimous"]
 
 
 def test_condition_result_to_dict_includes_convergence_warning() -> None:

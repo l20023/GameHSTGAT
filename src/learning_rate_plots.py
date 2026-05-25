@@ -120,6 +120,7 @@ def save_learning_rate_plot(
         if isinstance(fit_window_raw, (int, float)) and fit_window_raw > 0
         else len(epsilon_series)
     )
+    fit_t_values = t_values[:fit_window_t_max]
     can_plot_curves = (
         fit_success
         and isinstance(alpha, (int, float))
@@ -146,10 +147,10 @@ def save_learning_rate_plot(
         beta_gat_f = float(beta_gat)
         epsilon_inf_f = float(epsilon_inf)
         gat_curve = exponential_decay_values(
-            t_values, alpha=alpha_f, beta=beta_gat_f, epsilon_inf=epsilon_inf_f
+            fit_t_values, alpha=alpha_f, beta=beta_gat_f, epsilon_inf=epsilon_inf_f
         )
         ax_lin.plot(
-            t_values,
+            fit_t_values,
             gat_curve,
             "--",
             color="#2ca02c",
@@ -159,11 +160,15 @@ def save_learning_rate_plot(
         anchor_residual = max(float(empirical[0]) - epsilon_inf_f, floor)
         if anchor_residual > 0.0:
             beta_hst_f = float(beta_hst_max)
-            hst_curve = epsilon_inf_f + anchor_residual * np.exp(
-                -beta_hst_f * (t_values - anchor_t)
+            hst_alpha = 0.5 - epsilon_inf_f
+            hst_curve = exponential_decay_values(
+                fit_t_values,
+                alpha=hst_alpha,
+                beta=beta_hst_f,
+                epsilon_inf=epsilon_inf_f,
             )
             ax_lin.plot(
-                t_values,
+                fit_t_values,
                 hst_curve,
                 "--",
                 color="#d62728",
@@ -239,10 +244,10 @@ def save_learning_rate_plot(
     if can_plot_curves and anchor_residual > 0.0:
         beta_gat_f = float(beta_gat)
         beta_hst_f = float(beta_hst_max)
-        gat_slope_line = anchor_residual * np.exp(-beta_gat_f * (t_values - anchor_t))
-        hst_slope_line = anchor_residual * np.exp(-beta_hst_f * (t_values - anchor_t))
+        gat_slope_line = anchor_residual * np.exp(-beta_gat_f * (fit_t_values - anchor_t))
+        hst_slope_line = anchor_residual * np.exp(-beta_hst_f * (fit_t_values - anchor_t))
         ax_log.semilogy(
-            t_values,
+            fit_t_values,
             gat_slope_line,
             "--",
             color="#2ca02c",
@@ -250,7 +255,7 @@ def save_learning_rate_plot(
             label=rf"GAT slope ($\beta_{{\mathrm{{GAT}}}}$={beta_gat_f:.3f})",
         )
         ax_log.semilogy(
-            t_values,
+            fit_t_values,
             hst_slope_line,
             "--",
             color="#d62728",

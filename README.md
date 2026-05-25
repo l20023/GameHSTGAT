@@ -217,6 +217,55 @@ full per-episode training loss curve under `<condition>/train_loss`. Full
 Learning-rate plots are emitted in anchored form:
 - `__anchored_t0`: both GAT and HST reference curves use the same fitted `epsilon_inf` and are anchored at `epsilon(0)=0.5`.
 - fit model: `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf`.
+- **Linear panel:** GAT and HST curves use that anchored model (HST with `beta_HST_max`, not a predicted `epsilon(t)` trajectory).
+- **Log panel:** empirical `epsilon(t) - epsilon_inf` vs `t`; GAT/HST dashed lines share the same excess-error level at `t=1` and slope `-beta` (steepness comparison only).
+
+### Re-plot learning-rate curves from saved logs
+
+Requires `save_epsilon_series: true` in the training config so `metrics.json` contains `epsilon_series`.
+`--signal-quality` must match the original run (it is not stored per condition in metrics).
+
+List conditions in a metrics file:
+
+```bash
+python scripts/plot_learning_rate_from_logs.py \
+  --metrics artifacts/_smoke/seed_1/metrics.json \
+  --condition dummy \
+  --list-conditions
+```
+
+Auto-fit (truncates only a trailing suffix with perfect error rate `epsilon=0`):
+
+```bash
+python scripts/plot_learning_rate_from_logs.py \
+  --metrics artifacts/_smoke/seed_1/metrics.json \
+  --condition n_10/complete \
+  --signal-quality 0.6
+```
+
+Manual fit window — last round **included** in the beta fit (`1`-based, inclusive):
+
+```bash
+python scripts/plot_learning_rate_from_logs.py \
+  --metrics artifacts/_smoke/seed_1/metrics.json \
+  --condition n_10/complete \
+  --signal-quality 0.6 \
+  --fit-window-t-max 17
+```
+
+Custom output path:
+
+```bash
+python scripts/plot_learning_rate_from_logs.py \
+  --metrics artifacts/training_metrics_fair/grid_runs/n_10/q_0p6/seed_0/metrics.json \
+  --condition n_10/complete \
+  --signal-quality 0.6 \
+  --fit-window-t-max 15 \
+  --output artifacts/replots/complete_t15.png
+```
+
+Without `--output`, a manual `--fit-window-t-max` writes
+`<artifacts>/seed_<S>/plots/<condition>__anchored_t0__tmax_<T>.png` so original plots are not overwritten.
 
 Reading order for plots:
 1. Aggregate plots in `<artifacts_dir>/grid_runs/aggregate_plots/` give the headline view (beta vs q, beta vs n with HST reference).
