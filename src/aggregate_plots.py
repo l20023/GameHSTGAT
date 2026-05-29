@@ -28,7 +28,7 @@ def _bucket_records(records: list[dict[str, Any]]) -> dict[GroupKey, list[float]
     for record in records:
         num_nodes = record.get("num_nodes")
         signal_quality = record.get("signal_quality")
-        condition_name = record.get("condition_name")
+        condition_name = record.get("condition_name") or record.get("topology")
         beta_gat = _finite(record.get("beta_gat"))
         if (
             beta_gat is None

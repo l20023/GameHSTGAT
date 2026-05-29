@@ -10,16 +10,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from src.aggregate_plots import emit_seed_aggregate_plots
 from src.metrics_aggregate import (
     AGGREGATE_COLUMNS,
     aggregate_records,
     build_seed_aggregate_summary,
 )
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 CONDITION_KEY_RE = re.compile(r"^n_(\d+)/(.+)$")
 GRID_PATH_RE = re.compile(
