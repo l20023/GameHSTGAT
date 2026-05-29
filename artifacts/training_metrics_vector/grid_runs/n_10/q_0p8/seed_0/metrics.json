@@ -1,0 +1,919 @@
+{
+  "seed": 0,
+  "conditions": {
+    "n_10/complete": {
+      "train_loss_final": 0.061067432165145874,
+      "train_loss_running_mean_final": 0.043383012590929866,
+      "best_running_mean_loss": 0.01327439300948754,
+      "best_episode_idx": 4456,
+      "best_validation_error": 0.0042,
+      "best_validation_episode_idx": 599,
+      "validation_history": [
+        [
+          99,
+          0.00576
+        ],
+        [
+          199,
+          0.0068
+        ],
+        [
+          299,
+          0.00448
+        ],
+        [
+          399,
+          0.00444
+        ],
+        [
+          499,
+          0.00444
+        ],
+        [
+          599,
+          0.0042
+        ],
+        [
+          699,
+          0.00424
+        ],
+        [
+          799,
+          0.00444
+        ],
+        [
+          899,
+          0.00432
+        ],
+        [
+          999,
+          0.2218
+        ],
+        [
+          1099,
+          0.20052
+        ],
+        [
+          1199,
+          0.46832
+        ],
+        [
+          1299,
+          0.43948
+        ],
+        [
+          1399,
+          0.1986
+        ],
+        [
+          1499,
+          0.1986
+        ],
+        [
+          1599,
+          0.1986
+        ],
+        [
+          1699,
+          0.1986
+        ],
+        [
+          1799,
+          0.25104
+        ],
+        [
+          1899,
+          0.14088
+        ],
+        [
+          1999,
+          0.01912
+        ],
+        [
+          2099,
+          0.00988
+        ],
+        [
+          2199,
+          0.00888
+        ],
+        [
+          2299,
+          0.00728
+        ],
+        [
+          2399,
+          0.00512
+        ],
+        [
+          2499,
+          0.00892
+        ],
+        [
+          2599,
+          0.00788
+        ],
+        [
+          2699,
+          0.0068
+        ],
+        [
+          2799,
+          0.00644
+        ],
+        [
+          2899,
+          0.00548
+        ],
+        [
+          2999,
+          0.00524
+        ],
+        [
+          3099,
+          0.00548
+        ],
+        [
+          3199,
+          0.00484
+        ],
+        [
+          3299,
+          0.00892
+        ],
+        [
+          3399,
+          0.00768
+        ],
+        [
+          3499,
+          0.0074
+        ],
+        [
+          3599,
+          0.0066
+        ],
+        [
+          3699,
+          0.00532
+        ],
+        [
+          3799,
+          0.0052
+        ],
+        [
+          3899,
+          0.00512
+        ],
+        [
+          3999,
+          0.00508
+        ],
+        [
+          4099,
+          0.0048
+        ],
+        [
+          4199,
+          0.0048
+        ],
+        [
+          4299,
+          0.00516
+        ],
+        [
+          4399,
+          0.00516
+        ],
+        [
+          4499,
+          0.00668
+        ],
+        [
+          4599,
+          0.0052
+        ],
+        [
+          4699,
+          0.00508
+        ],
+        [
+          4799,
+          0.00508
+        ],
+        [
+          4899,
+          0.01904
+        ],
+        [
+          4999,
+          0.01076
+        ]
+      ],
+      "consensus": {
+        "unanimous": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 0.996,
+          "fraction_episodes_consensus_wrong_only": 0.004,
+          "fraction_correct_at_first_consensus": 0.996,
+          "mean_first_consensus_t": 2.175,
+          "median_first_consensus_t": 2.0
+        },
+        "majority": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 0.996,
+          "fraction_episodes_consensus_wrong_only": 0.004,
+          "fraction_correct_at_first_consensus": 0.983,
+          "mean_first_consensus_t": 1.033,
+          "median_first_consensus_t": 1.0
+        }
+      },
+      "beta_fit": {
+        "alpha": 0.4966042694829883,
+        "beta": 1.0480295379849724,
+        "beta_std": 0.023672650354391755,
+        "beta_ci_lower": 1.0016319958717552,
+        "beta_ci_upper": 1.0944270800981897,
+        "epsilon_inf": 0.003395730517011687,
+        "fit_success": true,
+        "method": "scipy_anchored_t0",
+        "rmse": 0.005092010870072107,
+        "r2": 0.966520139266558,
+        "fit_window_t_max": 50,
+        "n_full_series": 50,
+        "plateau_detected": false,
+        "fit_anchor": "t0",
+        "failure_reason": ""
+      },
+      "beta_hst_max": 2.7725887222397816,
+      "beta_gap": -1.7245591842548091,
+      "exceeds_hst_bound": false,
+      "convergence_warning": false,
+      "epsilon_series": [
+        0.1998,
+        0.043300000000000005,
+        0.0074,
+        0.0053,
+        0.0048000000000000004,
+        0.0046,
+        0.0045000000000000005,
+        0.0044,
+        0.004200000000000001,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004,
+        0.004
+      ],
+      "learning_rate_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p8/seed_0/plots/n_10__complete__anchored_t0.png",
+      "learning_rate_plot_anchored_t0": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p8/seed_0/plots/n_10__complete__anchored_t0.png",
+      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p8/seed_0/plots/n_10__complete__train_loss.png"
+    },
+    "n_10/ws_p_0.0_seed_0": {
+      "train_loss_final": 0.02563411369919777,
+      "train_loss_running_mean_final": 0.02113321631681174,
+      "best_running_mean_loss": 0.017246604659594596,
+      "best_episode_idx": 4456,
+      "best_validation_error": 0.00712,
+      "best_validation_episode_idx": 4599,
+      "validation_history": [
+        [
+          99,
+          0.01768
+        ],
+        [
+          199,
+          0.04804
+        ],
+        [
+          299,
+          0.02032
+        ],
+        [
+          399,
+          0.0104
+        ],
+        [
+          499,
+          0.01188
+        ],
+        [
+          599,
+          0.0102
+        ],
+        [
+          699,
+          0.00796
+        ],
+        [
+          799,
+          0.00812
+        ],
+        [
+          899,
+          0.008
+        ],
+        [
+          999,
+          0.00768
+        ],
+        [
+          1099,
+          0.0076
+        ],
+        [
+          1199,
+          0.00772
+        ],
+        [
+          1299,
+          0.01756
+        ],
+        [
+          1399,
+          0.00756
+        ],
+        [
+          1499,
+          0.00904
+        ],
+        [
+          1599,
+          0.0082
+        ],
+        [
+          1699,
+          0.00844
+        ],
+        [
+          1799,
+          0.00816
+        ],
+        [
+          1899,
+          0.51336
+        ],
+        [
+          1999,
+          0.48
+        ],
+        [
+          2099,
+          0.17692
+        ],
+        [
+          2199,
+          0.0104
+        ],
+        [
+          2299,
+          0.00988
+        ],
+        [
+          2399,
+          0.00816
+        ],
+        [
+          2499,
+          0.01052
+        ],
+        [
+          2599,
+          0.00796
+        ],
+        [
+          2699,
+          0.0084
+        ],
+        [
+          2799,
+          0.00828
+        ],
+        [
+          2899,
+          0.00812
+        ],
+        [
+          2999,
+          0.00752
+        ],
+        [
+          3099,
+          0.0078
+        ],
+        [
+          3199,
+          0.00764
+        ],
+        [
+          3299,
+          0.00752
+        ],
+        [
+          3399,
+          0.00768
+        ],
+        [
+          3499,
+          0.00764
+        ],
+        [
+          3599,
+          0.00764
+        ],
+        [
+          3699,
+          0.00752
+        ],
+        [
+          3799,
+          0.0076
+        ],
+        [
+          3899,
+          0.0074
+        ],
+        [
+          3999,
+          0.00724
+        ],
+        [
+          4099,
+          0.0074
+        ],
+        [
+          4199,
+          0.00744
+        ],
+        [
+          4299,
+          0.00736
+        ],
+        [
+          4399,
+          0.00732
+        ],
+        [
+          4499,
+          0.0074
+        ],
+        [
+          4599,
+          0.00712
+        ],
+        [
+          4699,
+          0.0072
+        ],
+        [
+          4799,
+          0.0072
+        ],
+        [
+          4899,
+          0.00756
+        ],
+        [
+          4999,
+          0.0072
+        ]
+      ],
+      "consensus": {
+        "unanimous": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 1.0,
+          "fraction_episodes_consensus_wrong_only": 0.0,
+          "fraction_correct_at_first_consensus": 1.0,
+          "mean_first_consensus_t": 2.747,
+          "median_first_consensus_t": 3.0
+        },
+        "majority": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 1.0,
+          "fraction_episodes_consensus_wrong_only": 0.0,
+          "fraction_correct_at_first_consensus": 0.991,
+          "mean_first_consensus_t": 1.035,
+          "median_first_consensus_t": 1.0
+        }
+      },
+      "beta_fit": {
+        "alpha": 0.49999999987966554,
+        "beta": 0.880854452576852,
+        "beta_std": 0.026480992709800165,
+        "beta_ci_lower": 0.828952660590776,
+        "beta_ci_upper": 0.932756244562928,
+        "epsilon_inf": 1.2033446865652468e-10,
+        "fit_success": true,
+        "method": "scipy_anchored_t0",
+        "rmse": 0.005386832918712365,
+        "r2": 0.9934567314217403,
+        "fit_window_t_max": 8,
+        "n_full_series": 50,
+        "plateau_detected": true,
+        "fit_anchor": "t0",
+        "failure_reason": ""
+      },
+      "beta_hst_max": 2.7725887222397816,
+      "beta_gap": -1.8917342696629296,
+      "exceeds_hst_bound": false,
+      "convergence_warning": false,
+      "epsilon_series": [
+        0.1998,
+        0.0983,
+        0.0316,
+        0.013000000000000001,
+        0.0044,
+        0.0017000000000000001,
+        0.0006000000000000001,
+        0.0004,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "learning_rate_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p8/seed_0/plots/n_10__ws_p_0.0_seed_0__anchored_t0.png",
+      "learning_rate_plot_anchored_t0": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p8/seed_0/plots/n_10__ws_p_0.0_seed_0__anchored_t0.png",
+      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p8/seed_0/plots/n_10__ws_p_0.0_seed_0__train_loss.png"
+    },
+    "n_10/ws_p_0.1_seed_0": {
+      "train_loss_final": 0.02089589834213257,
+      "train_loss_running_mean_final": 0.019958400051109493,
+      "best_running_mean_loss": 0.01717500286642462,
+      "best_episode_idx": 4879,
+      "best_validation_error": 0.00708,
+      "best_validation_episode_idx": 4999,
+      "validation_history": [
+        [
+          99,
+          0.3508
+        ],
+        [
+          199,
+          0.29612
+        ],
+        [
+          299,
+          0.01676
+        ],
+        [
+          399,
+          0.07184
+        ],
+        [
+          499,
+          0.01476
+        ],
+        [
+          599,
+          0.07576
+        ],
+        [
+          699,
+          0.0152
+        ],
+        [
+          799,
+          0.0178
+        ],
+        [
+          899,
+          0.11244
+        ],
+        [
+          999,
+          0.00948
+        ],
+        [
+          1099,
+          0.0096
+        ],
+        [
+          1199,
+          0.00868
+        ],
+        [
+          1299,
+          0.01024
+        ],
+        [
+          1399,
+          0.0088
+        ],
+        [
+          1499,
+          0.0082
+        ],
+        [
+          1599,
+          0.00804
+        ],
+        [
+          1699,
+          0.00796
+        ],
+        [
+          1799,
+          0.00792
+        ],
+        [
+          1899,
+          0.01028
+        ],
+        [
+          1999,
+          0.0078
+        ],
+        [
+          2099,
+          0.00968
+        ],
+        [
+          2199,
+          0.00784
+        ],
+        [
+          2299,
+          0.00788
+        ],
+        [
+          2399,
+          0.008
+        ],
+        [
+          2499,
+          0.00752
+        ],
+        [
+          2599,
+          0.00736
+        ],
+        [
+          2699,
+          0.06156
+        ],
+        [
+          2799,
+          0.009
+        ],
+        [
+          2899,
+          0.0082
+        ],
+        [
+          2999,
+          0.0082
+        ],
+        [
+          3099,
+          0.00804
+        ],
+        [
+          3199,
+          0.00812
+        ],
+        [
+          3299,
+          0.00788
+        ],
+        [
+          3399,
+          0.00788
+        ],
+        [
+          3499,
+          0.00816
+        ],
+        [
+          3599,
+          0.00788
+        ],
+        [
+          3699,
+          0.00776
+        ],
+        [
+          3799,
+          0.00788
+        ],
+        [
+          3899,
+          0.00772
+        ],
+        [
+          3999,
+          0.00768
+        ],
+        [
+          4099,
+          0.00744
+        ],
+        [
+          4199,
+          0.00764
+        ],
+        [
+          4299,
+          0.00744
+        ],
+        [
+          4399,
+          0.00736
+        ],
+        [
+          4499,
+          0.0076
+        ],
+        [
+          4599,
+          0.00712
+        ],
+        [
+          4699,
+          0.00712
+        ],
+        [
+          4799,
+          0.00712
+        ],
+        [
+          4899,
+          0.00724
+        ],
+        [
+          4999,
+          0.00708
+        ]
+      ],
+      "consensus": {
+        "unanimous": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 1.0,
+          "fraction_episodes_consensus_wrong_only": 0.0,
+          "fraction_correct_at_first_consensus": 1.0,
+          "mean_first_consensus_t": 2.708,
+          "median_first_consensus_t": 3.0
+        },
+        "majority": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 1.0,
+          "fraction_episodes_consensus_wrong_only": 0.0,
+          "fraction_correct_at_first_consensus": 0.991,
+          "mean_first_consensus_t": 1.033,
+          "median_first_consensus_t": 1.0
+        }
+      },
+      "beta_fit": {
+        "alpha": 0.49999999970941506,
+        "beta": 0.8857897919963917,
+        "beta_std": 0.033385999714031965,
+        "beta_ci_lower": 0.8203544349690246,
+        "beta_ci_upper": 0.9512251490237589,
+        "epsilon_inf": 2.905849481244887e-10,
+        "fit_success": true,
+        "method": "scipy_anchored_t0",
+        "rmse": 0.006268113276325886,
+        "r2": 0.9918647951621229,
+        "fit_window_t_max": 7,
+        "n_full_series": 50,
+        "plateau_detected": true,
+        "fit_anchor": "t0",
+        "failure_reason": ""
+      },
+      "beta_hst_max": 2.7725887222397816,
+      "beta_gap": -1.8867989302433898,
+      "exceeds_hst_bound": false,
+      "convergence_warning": false,
+      "epsilon_series": [
+        0.1998,
+        0.0983,
+        0.029300000000000003,
+        0.0105,
+        0.0035,
+        0.0009000000000000001,
+        0.0002,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "learning_rate_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p8/seed_0/plots/n_10__ws_p_0.1_seed_0__anchored_t0.png",
+      "learning_rate_plot_anchored_t0": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p8/seed_0/plots/n_10__ws_p_0.1_seed_0__anchored_t0.png",
+      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p8/seed_0/plots/n_10__ws_p_0.1_seed_0__train_loss.png"
+    }
+  },
+  "signal_quality": 0.8,
+  "num_nodes": 10
+}
