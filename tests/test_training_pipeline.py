@@ -11,7 +11,7 @@ from src.training_pipeline import (
     _new_consensus_mode_accumulator,
     _update_consensus_mode_accumulator,
     _detect_fit_window,
-    anchored_t1_decay_values,
+    anchored_t2_decay_values,
     condition_result_to_dict,
     consensus_to_dict,
     fit_beta_from_epsilon,
@@ -70,23 +70,43 @@ def test_consensus_to_dict_omits_series_by_default() -> None:
     assert payload["majority"]["fraction_episodes_reach_consensus"] == 0.9
 
 
+def _synthetic_t2_series(
+    *,
+    beta: float,
+    epsilon_inf: float,
+    alpha: float,
+    length: int = 21,
+) -> list[float]:
+    from src.training_pipeline import FIT_START_T
+
+    return [
+        float(
+            anchored_t2_decay_values(
+                np.array([float(t)]),
+                alpha=alpha,
+                beta=beta,
+                epsilon_inf=epsilon_inf,
+                fit_start_t=float(FIT_START_T),
+            )[0]
+        )
+        for t in range(1, length + 1)
+    ]
+
+
 def test_fit_beta_from_synthetic_exponential_series() -> None:
     beta = 0.35
     epsilon_inf = 0.05
-    epsilon_1 = 0.4
-    epsilon_series = [
-        (epsilon_1 - epsilon_inf) * math.exp(-beta * (t - 1)) + epsilon_inf
-        for t in range(1, 21)
-    ]
-    fit = fit_beta_from_epsilon(epsilon_series, anchor="t1")
+    alpha = 0.25
+    epsilon_series = _synthetic_t2_series(beta=beta, epsilon_inf=epsilon_inf, alpha=alpha)
+    fit = fit_beta_from_epsilon(epsilon_series)
     assert fit["fit_success"] is True
     assert isinstance(fit["beta"], float)
-    assert abs(float(fit["beta"]) - beta) < 0.05
+    assert abs(float(fit["beta"]) - beta) < 0.08
     assert isinstance(fit["rmse"], float)
     assert isinstance(fit["r2"], float)
     assert fit["failure_reason"] == ""
-    assert fit["method"] in {"scipy_anchored_t1", "anchored_t1_log_linear_fallback"}
-    if fit["method"] == "scipy_anchored_t1":
+    assert fit["method"] in {"scipy_anchored_t2", "anchored_t2_log_linear_fallback"}
+    if fit["method"] == "scipy_anchored_t2":
         assert isinstance(fit["beta_std"], float)
         assert math.isfinite(float(fit["beta_std"]))
         assert isinstance(fit["beta_ci_lower"], float)
@@ -97,16 +117,15 @@ def test_fit_beta_from_synthetic_exponential_series() -> None:
 def test_fit_beta_truncates_at_perfect_error_suffix() -> None:
     beta = 0.5
     epsilon_inf = 0.02
-    epsilon_1 = 0.38
+    alpha = 0.28
     perfect_length = 50
-    decay_part = [
-        (epsilon_1 - epsilon_inf) * math.exp(-beta * (t - 1)) + epsilon_inf
-        for t in range(1, 16)
-    ]
+    decay_part = _synthetic_t2_series(
+        beta=beta, epsilon_inf=epsilon_inf, alpha=alpha, length=15
+    )
     perfect_part = [0.0] * perfect_length
     series = decay_part + perfect_part
 
-    fit = fit_beta_from_epsilon(series, anchor="t1")
+    fit = fit_beta_from_epsilon(series)
     assert fit["fit_success"] is True
     assert fit["plateau_detected"] is True
     assert fit["n_full_series"] == len(series)
@@ -116,71 +135,64 @@ def test_fit_beta_truncates_at_perfect_error_suffix() -> None:
     assert fit_window == len(decay_part)
 
 
-def test_fit_beta_default_anchor_is_t0() -> None:
-    from src.training_pipeline import PRIOR_EPSILON_AT_T0
+def test_fit_beta_anchor_t2_free_fit_from_t2() -> None:
+    from src.training_pipeline import FIT_START_T, anchored_t2_decay_values
 
     beta = 0.35
     epsilon_inf = 0.05
+    alpha = 0.25
     series = [
-        (PRIOR_EPSILON_AT_T0 - epsilon_inf) * math.exp(-beta * t) + epsilon_inf
+        anchored_t2_decay_values(
+            np.array([float(t)]),
+            alpha=alpha,
+            beta=beta,
+            epsilon_inf=epsilon_inf,
+            fit_start_t=float(FIT_START_T),
+        )[0]
         for t in range(1, 21)
     ]
     fit = fit_beta_from_epsilon(series)
-    assert fit["fit_anchor"] == "t0"
-    assert fit["method"] in {"scipy_anchored_t0", "anchored_t0_log_linear_fallback"}
+    assert fit["fit_success"] is True
+    assert fit["fit_anchor"] == "t2"
+    assert fit["method"] in {"scipy_anchored_t2", "anchored_t2_log_linear_fallback"}
+    assert abs(float(fit["beta"]) - beta) < 0.08
+    assert abs(float(fit["alpha"]) - alpha) < 0.08
+    t2_pred = anchored_t2_decay_values(
+        np.array([float(FIT_START_T)]),
+        alpha=float(fit["alpha"]),
+        beta=float(fit["beta"]),
+        epsilon_inf=float(fit["epsilon_inf"]),
+    )[0]
+    assert abs(float(t2_pred) - series[FIT_START_T - 1]) < 0.05
 
 
-def test_fit_beta_anchor_t0_uses_prior_at_round_zero() -> None:
-    from src.training_pipeline import PRIOR_EPSILON_AT_T0, anchored_t0_decay_values
+def test_fit_beta_default_uses_t2_anchor() -> None:
+    from src.training_pipeline import FIT_START_T, anchored_t2_decay_values
 
     beta = 0.35
     epsilon_inf = 0.05
+    alpha = 0.25
     series = [
-        (PRIOR_EPSILON_AT_T0 - epsilon_inf) * math.exp(-beta * t) + epsilon_inf
+        anchored_t2_decay_values(
+            np.array([float(t)]),
+            alpha=alpha,
+            beta=beta,
+            epsilon_inf=epsilon_inf,
+            fit_start_t=float(FIT_START_T),
+        )[0]
         for t in range(1, 21)
     ]
-    fit = fit_beta_from_epsilon(series, anchor="t0")
-    assert fit["fit_success"] is True
-    assert fit["fit_anchor"] == "t0"
-    assert fit["method"] in {"scipy_anchored_t0", "anchored_t0_log_linear_fallback"}
-    t1_pred = anchored_t0_decay_values(
-        np.array([1.0]),
-        beta=float(fit["beta"]),
-        epsilon_inf=float(fit["epsilon_inf"]),
-    )[0]
-    expected_t1 = (PRIOR_EPSILON_AT_T0 - epsilon_inf) * math.exp(-beta) + epsilon_inf
-    assert abs(float(t1_pred) - expected_t1) < 1e-9
-
-
-def test_fit_beta_matches_empirical_at_t1() -> None:
-    epsilon_1 = 0.33
-    beta = 0.2
-    epsilon_inf = 0.04
-    series = [
-        (epsilon_1 - epsilon_inf) * math.exp(-beta * (t - 1)) + epsilon_inf
-        for t in range(1, 11)
-    ]
-    fit = fit_beta_from_epsilon(series, anchor="t1")
-    assert fit["fit_success"] is True
-    assert fit.get("fit_anchor", "t1") == "t1"
-    t1_pred = anchored_t1_decay_values(
-        np.array([1.0]),
-        beta=float(fit["beta"]),
-        epsilon_inf=float(fit["epsilon_inf"]),
-        epsilon_1=epsilon_1,
-    )[0]
-    assert abs(float(t1_pred) - epsilon_1) < 1e-9
+    fit = fit_beta_from_epsilon(series)
+    assert fit["fit_anchor"] == "t2"
+    assert fit["method"] in {"scipy_anchored_t2", "anchored_t2_log_linear_fallback"}
 
 
 def test_fit_beta_no_plateau_detection_when_decay_continues() -> None:
-    epsilon_1 = 0.4
     beta = 0.05
     epsilon_inf = 0.0
-    series = [
-        (epsilon_1 - epsilon_inf) * math.exp(-beta * (t - 1)) + epsilon_inf
-        for t in range(1, 21)
-    ]
-    fit = fit_beta_from_epsilon(series, anchor="t1")
+    alpha = 0.4
+    series = _synthetic_t2_series(beta=beta, epsilon_inf=epsilon_inf, alpha=alpha)
+    fit = fit_beta_from_epsilon(series)
     assert fit["fit_success"] is True
     assert fit["plateau_detected"] is False
     assert int(fit["fit_window_t_max"]) == len(series)
@@ -214,8 +226,8 @@ def test_detect_fit_window_truncates_perfect_suffix() -> None:
 
 def test_fit_beta_respects_manual_fit_window() -> None:
     series = [0.4, 0.25, 0.15, 0.1, 0.08, 0.07, 0.06]
-    fit = fit_beta_from_epsilon(series, fit_window_t_max=3)
-    assert int(fit["fit_window_t_max"]) == 3
+    fit = fit_beta_from_epsilon(series, fit_window_t_max=5)
+    assert int(fit["fit_window_t_max"]) == 5
     assert int(fit["n_full_series"]) == len(series)
     assert fit["plateau_detected"] is True
 

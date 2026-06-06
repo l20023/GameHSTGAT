@@ -198,88 +198,31 @@ Fairness protocol for HST comparison:
 
 ## Artifacts
 
-- Graph cache: `artifacts/graphs`
-- Metrics: `artifacts/training_metrics/seed_<seed>/metrics.json` (compact by default)
-- Plots: `artifacts/.../seed_<seed>/plots/<condition>__anchored_t0.png` and `<condition>__train_loss.png`
+Canonical layout (fair channel; vector mirrors under `training_metrics_vector/`):
 
-Each metrics file stores beta fit, HST comparison, and `train_loss_final`. Full
-`train_loss_history` / `epsilon_series` arrays in JSON are omitted unless enabled in config.
+| What | Path |
+|------|------|
+| Graph cache | `artifacts/graphs/` |
+| Per-seed metrics | `artifacts/training_metrics_fair/grid_runs/n_*/q_*/seed_*/metrics.json` |
+| Per-seed plots | `.../seed_*/plots/<condition>__anchored_t2.png` |
+| Cell mean plots | `.../n_*/q_*/plots/<condition>__anchored_t2_aggregated.png` |
+| Aggregate plots | `.../grid_runs/aggregate_plots/beta_vs_{n,q}.png` |
+| **Analysis tables** | `artifacts/metrics_summary_{fair,vector}.csv` (per seed) |
+| Cell rollups | `artifacts/metrics_summary_*_aggregated.csv` (mean over seeds) |
+| Grid overview | `artifacts/grid_summary_{fair,vector}.json` (optional monitoring) |
 
-Learning-rate plots use the default **fit-anchor `t0`** (`__anchored_t0` filename suffix):
-- Fit model: `epsilon(t) = (0.5 - epsilon_inf) * exp(-beta * t) + epsilon_inf` (prior `epsilon(0)=0.5` at round 0).
-- **Shared point (t0):** GAT and HST meet at **ε(0)=0.5** (visible at `t=0` on the plot). At **t=1** they usually differ (different β); the empirical point need not lie on the fit curve.
-- HST uses `beta_HST_max` (max permitted slope, not a forecast). The grey fit-window marker applies to measured rounds `t ≥ 1`.
-- **Log panel:** `ε(t)−ε∞` with slopes `∝ exp(−β·t)` from the same t0 base `(0.5−ε∞)`.
+**For analysis, use `metrics_summary_*.csv`** (per-seed β, exceed flags). Use aggregated CSV for mean curves; `grid_summary_*.json` is optional.
 
-**Fit-anchor `t1`** (sensitivity / comparison): GAT and HST both pass through **empirical ε(1)** at `t=1`;
-`epsilon(t) = (epsilon(1) - epsilon_inf) * exp(-beta * (t-1)) + epsilon_inf`. Use
-`--fit-anchor t1` in `plot_learning_rate_from_logs.py` (suffix `__anchored_t1`).
+### Beta fitting (t≥2 only)
 
-### Re-plot learning-rate curves from saved logs
+All fits use **anchor t=2** — social information has mixed into the GAT input from round 2 onward:
 
-Requires `save_epsilon_series: true` in the training config so `metrics.json` contains `epsilon_series`.
-`--signal-quality` must match the original run (it is not stored per condition in metrics).
+`ε(t) = α · exp(−β·(t−2)) + ε∞` for `t ≥ 2`
 
-List conditions in a metrics file:
-
-```bash
-python scripts/plot_learning_rate_from_logs.py \
-  --metrics artifacts/_smoke/seed_1/metrics.json \
-  --condition dummy \
-  --list-conditions
-```
-
-Auto-fit with default anchor `t0` (truncates only a trailing suffix with perfect error rate `epsilon=0`):
-
-```bash
-python scripts/plot_learning_rate_from_logs.py \
-  --metrics artifacts/_smoke/seed_1/metrics.json \
-  --condition n_10/complete \
-  --signal-quality 0.6
-```
-
-Empirical anchor `t1` (round-1 error):
-
-```bash
-python scripts/plot_learning_rate_from_logs.py \
-  --metrics artifacts/_smoke/seed_1/metrics.json \
-  --condition n_10/complete \
-  --signal-quality 0.6 \
-  --fit-anchor t1
-```
-
-Manual fit window — last round **included** in the beta fit (`1`-based, inclusive):
-
-```bash
-python scripts/plot_learning_rate_from_logs.py \
-  --metrics artifacts/_smoke/seed_1/metrics.json \
-  --condition n_10/complete \
-  --signal-quality 0.6 \
-  --fit-window-t-max 17
-```
-
-Custom output path:
-
-```bash
-python scripts/plot_learning_rate_from_logs.py \
-  --metrics artifacts/training_metrics_fair/grid_runs/n_10/q_0p6/seed_0/metrics.json \
-  --condition n_10/complete \
-  --signal-quality 0.6 \
-  --fit-window-t-max 15 \
-  --output artifacts/replots/complete_t15.png
-```
-
-Without `--output`, a manual `--fit-window-t-max` writes
-`<artifacts>/seed_<S>/plots/<condition>__anchored_t0__tmax_<T>.png` (or `__anchored_t1__` with `--fit-anchor t1`)
-so original plots are not overwritten.
-
-Reading order for plots:
-1. Aggregate plots in `<artifacts_dir>/grid_runs/aggregate_plots/` (or `aggregate/plots/` after replication) give the headline view (beta vs q, beta vs n with HST reference).
-2. Per-condition `__anchored_t0` plots show the empirical decay vs both fits for a single seed/setting (use only for diagnostics).
-3. Per-seed `metrics.json` contains per-fit Wald CIs (`beta_std`, `beta_ci_lower`, `beta_ci_upper`) for sanity checks.
-
-Each condition now also includes:
-- `convergence_warning` (true when fitted `epsilon_inf > 0.05`)
+- GAT: free `α`, `β`, `ε∞` on `t ≥ 2`
+- HST reference: same `α` and `ε∞`, `β = β_HST_max(q)` — curves meet at **t=2**
+- Plot suffix: `__anchored_t2.png`
+- `convergence_warning`: true when fitted `ε∞ > 0.05` (bound comparison suppressed)
 
 Config flags (`configs/default.yaml`):
 
@@ -287,23 +230,67 @@ Config flags (`configs/default.yaml`):
 - `save_epsilon_series: true`
 - `save_learning_rate_plots: true`
 
-### Summarize all metrics into one table
+### Re-plot from saved logs
+
+Requires `save_epsilon_series: true`. `--signal-quality` must match the training run.
+
+```bash
+python scripts/plot_learning_rate_from_logs.py \
+  --metrics artifacts/training_metrics_fair/grid_runs/n_10/q_0p55/seed_0/metrics.json \
+  --condition n_10/complete \
+  --signal-quality 0.55
+```
+
+Refit entire grid + regenerate plots + CSVs:
+
+```bash
+python scripts/refit_and_regenerate.py \
+  --artifacts-root artifacts/training_metrics_fair/grid_runs \
+  --communication-mode fair_1bit
+```
+
+### Summarize metrics
 
 ```bash
 python scripts/summarize_metrics.py \
   --root artifacts/training_metrics_fair/grid_runs \
   --csv artifacts/metrics_summary_fair.csv \
   --aggregate-csv artifacts/metrics_summary_fair_aggregated.csv \
-  --aggregate-json artifacts/metrics_summary_fair_aggregated.json \
   --aggregate-plots-dir artifacts/training_metrics_fair/grid_runs/aggregate_plots
 ```
 
-`--aggregate-csv` reports mean/std of `beta_gat` and `beta_gap` across seeds per `(n, q, topology)` cell,
-plus the best run (`beta_gat_best`, `beta_gat_best_seed`, `beta_gap_at_best`).
-`scripts/run_replication.sh` runs the same aggregation automatically after all seeds finish.
+### Episode animation (cluster → local)
 
-Scan multiple artifact trees (e.g. grid + smoke) with repeated `--root`. Columns include
-`beta_gat`, `beta_hst_max`, `beta_gap`, `exceeds_hst_bound`, and fit diagnostics per condition.
+Grid training saves **metrics only**, not model weights. To animate per-node predictions:
+
+**1. On the cluster** — train one cell and save a checkpoint:
+
+```bash
+python scripts/animate_episode.py \
+  --seed 0 --num-nodes 10 --signal-quality 0.55 --topology complete \
+  --train-episodes 5000 \
+  --save-checkpoint artifacts/checkpoints/fair_1bit/n_10/q_0p55/complete/seed_0.pt
+```
+
+**2. Download** checkpoint + graph cache:
+
+```bash
+scp cluster:.../artifacts/checkpoints/.../seed_0.pt ./artifacts/checkpoints/...
+scp -r cluster:.../artifacts/graphs ./artifacts/graphs
+```
+
+**3. Locally** — render GIF (no training):
+
+```bash
+python scripts/animate_episode.py \
+  --checkpoint artifacts/checkpoints/fair_1bit/n_10/q_0p55/complete/seed_0.pt \
+  --skip-train \
+  --seed 0 --num-nodes 10 --signal-quality 0.55 --topology complete \
+  --episode-seed 4242 \
+  --output artifacts/animations/demo.gif
+```
+
+Each frame shows per-node prediction ŷ, private signal s, correct/wrong vs θ, and the communicated 1-bit.
 
 For a full technical walkthrough of the model and design decisions, see `MODEL_README.md`.
 
@@ -312,12 +299,6 @@ For a full technical walkthrough of the model and design decisions, see `MODEL_R
 - `beta_GAT <= beta_HST_max` means the trained RGAT is slower than (or equal to) the HST equilibrium benchmark for that setup.
 - This is consistent with the equilibrium bound, but does **not** prove a universal information-theoretic impossibility result for all learning algorithms.
 - `beta_GAT > beta_HST_max` is empirical counter-evidence relative to the equilibrium model assumptions; it does not invalidate the HST theorem itself.
-
-## Artifact state in this repository
-
-- Active path for current fair runs: `artifacts/training_metrics_fair/`.
-- Historical runs are under `artifacts/First Trainings/` and include the broader `n={10,50,100}` sweeps.
-- The single observed exceedance in local artifacts appears at `n=50, q=0.6, complete, seed=0` in `First Trainings`; other seeds for that setting do not exceed.
 
 ## Proposal vs implementation defaults
 

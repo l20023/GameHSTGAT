@@ -429,24 +429,25 @@
         }
       },
       "beta_fit": {
-        "alpha": 0.5,
-        "beta": 1.1341477224509233,
-        "beta_std": 0.04985340131406688,
-        "beta_ci_lower": 1.0364368513685305,
-        "beta_ci_upper": 1.2318585935333162,
-        "epsilon_inf": 4.0046580939793405e-23,
+        "alpha": 1e-06,
+        "beta": 0.1,
+        "beta_std": 0.045805212576405074,
+        "beta_ci_lower": 0.010223433046044922,
+        "beta_ci_upper": 0.1897765669539551,
+        "epsilon_inf": 1e-10,
         "fit_success": true,
-        "method": "scipy_anchored_t0",
-        "rmse": 0.009517739837511297,
-        "r2": 0.8846014857893206,
+        "method": "scipy_anchored_t2",
+        "rmse": 3.3559074215867605e-07,
+        "r2": NaN,
         "fit_window_t_max": 50,
         "n_full_series": 50,
         "plateau_detected": false,
-        "fit_anchor": "t0",
+        "fit_anchor": "t2",
+        "fit_start_t": 2,
         "failure_reason": ""
       },
       "beta_hst_max": 2.7725887222397816,
-      "beta_gap": -1.6384409997888583,
+      "beta_gap": -2.6725887222397815,
       "exceeds_hst_bound": false,
       "convergence_warning": false,
       "epsilon_series": [
@@ -501,9 +502,9 @@
         0.0,
         0.0
       ],
-      "learning_rate_plot": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__complete__anchored_t0.png",
-      "learning_rate_plot_anchored_t0": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__complete__anchored_t0.png",
-      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__complete__train_loss.png"
+      "learning_rate_plot": "/Users/leo-minhkustermann/Developer/Game Theory Project/artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__complete__anchored_t2.png",
+      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__complete__train_loss.png",
+      "learning_rate_plot_anchored_t2": "/Users/leo-minhkustermann/Developer/Game Theory Project/artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__complete__anchored_t2.png"
     },
     "n_1000/ws_p_0.0_seed_1": {
       "train_loss_final": 0.02507689595222473,
@@ -933,24 +934,25 @@
         }
       },
       "beta_fit": {
-        "alpha": 0.4999999999999989,
-        "beta": 0.878282947229493,
-        "beta_std": 0.0346610485719812,
-        "beta_ci_lower": 0.8103485403620163,
-        "beta_ci_upper": 0.9462173540969696,
-        "epsilon_inf": 1.1099684597916433e-15,
+        "alpha": 0.10383009537979697,
+        "beta": 1.3103832315257042,
+        "beta_std": 0.009234978426584727,
+        "beta_ci_lower": 1.2922830064115938,
+        "beta_ci_upper": 1.3284834566398147,
+        "epsilon_inf": 2.3062285191986638e-05,
         "fit_success": true,
-        "method": "scipy_anchored_t0",
-        "rmse": 0.007469092897222652,
-        "r2": 0.9870133431982382,
+        "method": "scipy_anchored_t2",
+        "rmse": 0.00019467402921801336,
+        "r2": 0.9999667013439474,
         "fit_window_t_max": 9,
         "n_full_series": 50,
         "plateau_detected": true,
-        "fit_anchor": "t0",
+        "fit_anchor": "t2",
+        "fit_start_t": 2,
         "failure_reason": ""
       },
       "beta_hst_max": 2.7725887222397816,
-      "beta_gap": -1.8943057750102885,
+      "beta_gap": -1.4622054907140773,
       "exceeds_hst_bound": false,
       "convergence_warning": false,
       "epsilon_series": [
@@ -1005,9 +1007,9 @@
         0.0,
         0.0
       ],
-      "learning_rate_plot": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.0_seed_1__anchored_t0.png",
-      "learning_rate_plot_anchored_t0": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.0_seed_1__anchored_t0.png",
-      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.0_seed_1__train_loss.png"
+      "learning_rate_plot": "/Users/leo-minhkustermann/Developer/Game Theory Project/artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.0_seed_1__anchored_t2.png",
+      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.0_seed_1__train_loss.png",
+      "learning_rate_plot_anchored_t2": "/Users/leo-minhkustermann/Developer/Game Theory Project/artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.0_seed_1__anchored_t2.png"
     },
     "n_1000/ws_p_0.1_seed_1": {
       "train_loss_final": 0.020102959126234055,
@@ -1437,24 +1439,25 @@
         }
       },
       "beta_fit": {
-        "alpha": 0.499999999981863,
-        "beta": 0.8840130608626056,
-        "beta_std": 0.023978416292316236,
-        "beta_ci_lower": 0.8370162285233573,
-        "beta_ci_upper": 0.9310098932018538,
-        "epsilon_inf": 1.8137019580875093e-11,
+        "alpha": 0.09963791251578431,
+        "beta": 1.2265561615572,
+        "beta_std": 0.004584521973706188,
+        "beta_ci_lower": 1.2175706636024035,
+        "beta_ci_upper": 1.2355416595119966,
+        "epsilon_inf": 2.9260171976673327e-05,
         "fit_success": true,
-        "method": "scipy_anchored_t0",
-        "rmse": 0.005508539024137635,
-        "r2": 0.9917238667932707,
+        "method": "scipy_anchored_t2",
+        "rmse": 0.00011301346831615857,
+        "r2": 0.9999856124742429,
         "fit_window_t_max": 11,
         "n_full_series": 50,
         "plateau_detected": true,
-        "fit_anchor": "t0",
+        "fit_anchor": "t2",
+        "fit_start_t": 2,
         "failure_reason": ""
       },
       "beta_hst_max": 2.7725887222397816,
-      "beta_gap": -1.888575661377176,
+      "beta_gap": -1.5460325606825815,
       "exceeds_hst_bound": false,
       "convergence_warning": false,
       "epsilon_series": [
@@ -1509,9 +1512,9 @@
         0.0,
         0.0
       ],
-      "learning_rate_plot": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.1_seed_1__anchored_t0.png",
-      "learning_rate_plot_anchored_t0": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.1_seed_1__anchored_t0.png",
-      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.1_seed_1__train_loss.png"
+      "learning_rate_plot": "/Users/leo-minhkustermann/Developer/Game Theory Project/artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.1_seed_1__anchored_t2.png",
+      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.1_seed_1__train_loss.png",
+      "learning_rate_plot_anchored_t2": "/Users/leo-minhkustermann/Developer/Game Theory Project/artifacts/training_metrics_vector/grid_runs/n_1000/q_0p8/seed_1/plots/n_1000__ws_p_0.1_seed_1__anchored_t2.png"
     }
   },
   "signal_quality": 0.8,

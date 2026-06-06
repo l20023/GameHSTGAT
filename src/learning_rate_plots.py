@@ -3,52 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 
 from .training_pipeline import (
     DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
-    FitAnchor,
-    PRIOR_EPSILON_AT_T0,
-    anchored_t0_decay_values,
-    anchored_t1_decay_values,
-    normalize_fit_anchor,
+    FIT_START_T,
+    anchored_t2_decay_values,
+    hst_alpha_at_t2_intersection,
 )
 
-PlotVariant = Literal["anchored_t1", "anchored_t0"]
-
-
-def _decay_curve(
-    t_values: np.ndarray,
-    *,
-    beta: float,
-    epsilon_inf: float,
-    anchor: FitAnchor,
-    epsilon_1: float,
-) -> np.ndarray:
-    if anchor == "t1":
-        return anchored_t1_decay_values(
-            t_values, beta=beta, epsilon_inf=epsilon_inf, epsilon_1=epsilon_1
-        )
-    return anchored_t0_decay_values(t_values, beta=beta, epsilon_inf=epsilon_inf)
-
-
-def _resolve_plot_anchor(
-    beta_fit: dict[str, Any],
-    plot_variant: PlotVariant,
-    *,
-    fit_anchor: FitAnchor | None = None,
-) -> FitAnchor:
-    """Resolve anchor: explicit arg > stored fit > plot variant; default t0."""
-    if fit_anchor is not None:
-        return normalize_fit_anchor(fit_anchor)
-    stored = beta_fit.get("fit_anchor")
-    if isinstance(stored, str) and stored in ("t1", "t0"):
-        return normalize_fit_anchor(stored)
-    if plot_variant == "anchored_t1":
-        return "t1"
-    return "t0"
+PLOT_VARIANT = "anchored_t2"
 
 
 def _build_learning_rate_suptitle(
@@ -61,14 +27,9 @@ def _build_learning_rate_suptitle(
     epsilon_inf: float | None,
     fit_success: bool,
     convergence_warning_threshold: float,
-    fit_anchor: FitAnchor,
 ) -> str:
     """Assemble the figure suptitle including quality and bound flags."""
-    anchor_label = (
-        r"$\varepsilon(1)$ empirical"
-        if fit_anchor == "t1"
-        else rf"$\varepsilon(0)={0.5:.1f}$ prior"
-    )
+    anchor_label = rf"shared origin $t={FIT_START_T}$ (fit from $t\geq {FIT_START_T}$)"
     parts = [f"{condition_key}  |  q={signal_quality:.2f}  |  anchor={anchor_label}"]
 
     if isinstance(beta_gap, float) and np.isfinite(beta_gap):
@@ -101,12 +62,10 @@ def learning_rate_plot_path(
     artifacts_dir: Path,
     seed: int,
     condition_key: str,
-    plot_variant: PlotVariant = "anchored_t0",
 ) -> Path:
     """Return the PNG path for one condition's learning-rate plot."""
     safe_name = condition_key.replace("/", "__")
-    suffix = plot_variant
-    return artifacts_dir / f"seed_{seed}" / "plots" / f"{safe_name}__{suffix}.png"
+    return artifacts_dir / f"seed_{seed}" / "plots" / f"{safe_name}__{PLOT_VARIANT}.png"
 
 
 def save_learning_rate_plot(
@@ -121,15 +80,11 @@ def save_learning_rate_plot(
     exceeds_hst_bound: bool | None = None,
     convergence_warning: bool = False,
     convergence_warning_threshold: float = DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
-    plot_variant: PlotVariant = "anchored_t0",
-    fit_anchor: FitAnchor | None = "t0",
 ) -> Path:
     """
     Render a dual-panel decay plot for one condition.
 
-    Default fit_anchor is t0: GAT and HST share epsilon(0)=0.5 at t=0 (shown on the x-axis).
-    With t1, both curves pass through empirical epsilon(1) at t=1. The fit-window marker
-    applies to measured rounds t>=1 only.
+    GAT free fit on t>=2; HST uses the same alpha and epsilon_inf so both curves meet at t=2.
     """
     import matplotlib
 
@@ -139,17 +94,10 @@ def save_learning_rate_plot(
     if not epsilon_series:
         raise ValueError("epsilon_series must be non-empty to plot learning rate.")
 
-    resolved_anchor = _resolve_plot_anchor(
-        beta_fit, plot_variant, fit_anchor=fit_anchor
-    )
-
+    fit_start_t = float(beta_fit.get("fit_start_t", FIT_START_T))
     t_values = np.arange(1, len(epsilon_series) + 1, dtype=float)
     empirical = np.asarray(epsilon_series, dtype=float)
-    epsilon_1_f = float(empirical[0])
-    if resolved_anchor == "t0":
-        curve_t_plot = np.concatenate([[0.0], t_values])
-    else:
-        curve_t_plot = t_values
+    curve_t_plot = np.arange(fit_start_t, len(epsilon_series) + 1, dtype=float)
 
     fig, (ax_lin, ax_log) = plt.subplots(1, 2, figsize=(13, 5))
 
@@ -164,7 +112,6 @@ def save_learning_rate_plot(
         if isinstance(fit_window_raw, (int, float)) and fit_window_raw > 0
         else len(epsilon_series)
     )
-    fit_t_values = t_values[:fit_window_t_max]
     can_plot_curves = (
         fit_success
         and isinstance(alpha, (int, float))
@@ -183,26 +130,28 @@ def save_learning_rate_plot(
         label=r"$\varepsilon(t)$ empirical",
     )
     floor = 1e-4
-    anchor_residual = 0.0
     if can_plot_curves:
         beta_gat_f = float(beta_gat)
         epsilon_inf_f = float(epsilon_inf)
+        alpha_f = float(alpha)
         beta_hst_f = float(beta_hst_max)
-        gat_curve = _decay_curve(
+        hst_alpha = hst_alpha_at_t2_intersection(gat_alpha=alpha_f)
+        gat_curve = anchored_t2_decay_values(
             curve_t_plot,
+            alpha=alpha_f,
             beta=beta_gat_f,
             epsilon_inf=epsilon_inf_f,
-            anchor=resolved_anchor,
-            epsilon_1=epsilon_1_f,
+            fit_start_t=fit_start_t,
         )
-        hst_curve = _decay_curve(
+        hst_curve = anchored_t2_decay_values(
             curve_t_plot,
+            alpha=hst_alpha,
             beta=beta_hst_f,
             epsilon_inf=epsilon_inf_f,
-            anchor=resolved_anchor,
-            epsilon_1=epsilon_1_f,
+            fit_start_t=fit_start_t,
         )
-        anchor_tag = "1" if resolved_anchor == "t1" else "0"
+        anchor_tag = str(int(fit_start_t))
+        shared_anchor_epsilon = float(gat_curve[0])
         ax_lin.plot(
             curve_t_plot,
             gat_curve,
@@ -211,7 +160,7 @@ def save_learning_rate_plot(
             linewidth=2.0,
             label=(
                 rf"GAT fit ($\beta_{{\mathrm{{GAT}}}}$={beta_gat_f:.3f}, "
-                rf"anchor $t={anchor_tag}$)"
+                rf"free $\alpha,\beta$ from $t={anchor_tag}$)"
             ),
         )
         ax_lin.plot(
@@ -222,24 +171,30 @@ def save_learning_rate_plot(
             linewidth=2.0,
             label=(
                 rf"HST max slope ($\beta_{{\mathrm{{HST}}}}$={beta_hst_f:.3f}, "
-                rf"anchor $t={anchor_tag}$)"
+                rf"$\alpha$ matched at $t={anchor_tag}$)"
             ),
         )
-        if resolved_anchor == "t0":
-            ax_lin.plot(
-                [0.0],
-                [PRIOR_EPSILON_AT_T0],
-                "s",
-                color="#9467bd",
-                markersize=7,
-                markerfacecolor="white",
-                markeredgewidth=1.5,
-                label=rf"shared anchor $\varepsilon(0)={PRIOR_EPSILON_AT_T0}$",
-                zorder=5,
-            )
-            anchor_residual = max(PRIOR_EPSILON_AT_T0 - epsilon_inf_f, floor)
-        else:
-            anchor_residual = max(epsilon_1_f - epsilon_inf_f, floor)
+        ax_lin.plot(
+            [fit_start_t],
+            [shared_anchor_epsilon],
+            "s",
+            color="#9467bd",
+            markersize=7,
+            markerfacecolor="white",
+            markeredgewidth=1.5,
+            label=rf"shared origin $\varepsilon({int(fit_start_t)})={shared_anchor_epsilon:.3f}$",
+            zorder=5,
+        )
+        anchor_residual = max(alpha_f, floor)
+
+    if can_plot_curves:
+        ax_lin.axvline(
+            x=float(fit_start_t) - 0.5,
+            color="#bbbbbb",
+            linestyle=":",
+            linewidth=1.0,
+            label=rf"fit window ($t \geq {int(fit_start_t)}$)",
+        )
     if plateau_detected and 0 < fit_window_t_max < len(epsilon_series):
         ax_lin.axvline(
             x=float(fit_window_t_max),
@@ -284,8 +239,7 @@ def save_learning_rate_plot(
     ax_lin.set_xlabel("Round $t$")
     ax_lin.set_ylabel(r"Error rate $\varepsilon(t)$")
     ax_lin.set_ylim(bottom=0.0)
-    if resolved_anchor == "t0":
-        ax_lin.set_xlim(left=-0.2)
+    ax_lin.set_xlim(left=0.8)
     ax_lin.grid(True, alpha=0.3)
     ax_lin.legend(loc="best", fontsize=9)
     ax_lin.set_title("Empirical decay (linear)", fontsize=11)
@@ -309,16 +263,11 @@ def save_learning_rate_plot(
         beta_gat_f = float(beta_gat)
         beta_hst_f = float(beta_hst_max)
         epsilon_inf_f = float(epsilon_inf)
-        if resolved_anchor == "t0":
-            slope_t_axis = curve_t_plot
-            slope_base = max(PRIOR_EPSILON_AT_T0 - epsilon_inf_f, floor)
-            gat_slope_line = slope_base * np.exp(-beta_gat_f * slope_t_axis)
-            hst_slope_line = slope_base * np.exp(-beta_hst_f * slope_t_axis)
-        else:
-            slope_t_axis = t_values
-            slope_residual = max(anchor_residual, floor)
-            gat_slope_line = slope_residual * np.exp(-beta_gat_f * (slope_t_axis - 1.0))
-            hst_slope_line = slope_residual * np.exp(-beta_hst_f * (slope_t_axis - 1.0))
+        alpha_f = float(alpha)
+        slope_t_axis = curve_t_plot
+        slope_base = max(alpha_f, floor)
+        gat_slope_line = slope_base * np.exp(-beta_gat_f * (slope_t_axis - fit_start_t))
+        hst_slope_line = slope_base * np.exp(-beta_hst_f * (slope_t_axis - fit_start_t))
         ax_log.semilogy(
             slope_t_axis,
             gat_slope_line,
@@ -335,8 +284,14 @@ def save_learning_rate_plot(
             linewidth=2.0,
             label=rf"HST max slope ($\beta_{{\mathrm{{HST}}}}$={beta_hst_f:.3f})",
         )
-        if resolved_anchor == "t0":
-            ax_log.set_xlim(left=-0.2)
+        ax_log.set_xlim(left=fit_start_t - 0.2)
+        ax_log.axvline(
+            x=float(fit_start_t) - 0.5,
+            color="#bbbbbb",
+            linestyle=":",
+            linewidth=1.0,
+            label=rf"fit window ($t \geq {int(fit_start_t)}$)",
+        )
     if plateau_detected and 0 < fit_window_t_max < len(epsilon_series):
         ax_log.axvline(
             x=float(fit_window_t_max),
@@ -375,7 +330,6 @@ def save_learning_rate_plot(
         epsilon_inf=epsilon_inf_value,
         fit_success=fit_success,
         convergence_warning_threshold=convergence_warning_threshold,
-        fit_anchor=resolved_anchor,
     )
     fig.suptitle(suptitle, fontsize=11)
 
@@ -387,7 +341,7 @@ def save_learning_rate_plot(
 
 
 __all__ = [
-    "PlotVariant",
+    "PLOT_VARIANT",
     "_build_learning_rate_suptitle",
     "learning_rate_plot_path",
     "save_learning_rate_plot",

@@ -8,11 +8,12 @@ import numpy as np
 import pytest
 
 from src.learning_rate_plots import (
+    PLOT_VARIANT,
     _build_learning_rate_suptitle,
     learning_rate_plot_path,
     save_learning_rate_plot,
 )
-from src.training_pipeline import PRIOR_EPSILON_AT_T0, anchored_t0_decay_values
+from src.training_pipeline import FIT_START_T, anchored_t2_decay_values
 
 
 def test_build_suptitle_shows_convergence_warning_instead_of_within_bound() -> None:
@@ -25,11 +26,11 @@ def test_build_suptitle_shows_convergence_warning_instead_of_within_bound() -> N
         epsilon_inf=0.08,
         fit_success=True,
         convergence_warning_threshold=0.05,
-        fit_anchor="t1",
     )
     assert "convergence warning" in title
     assert "bound comparison suppressed" in title
     assert "within bound" not in title
+    assert f"t={FIT_START_T}" in title
 
 
 def test_build_suptitle_shows_fit_failed() -> None:
@@ -42,25 +43,23 @@ def test_build_suptitle_shows_fit_failed() -> None:
         epsilon_inf=None,
         fit_success=False,
         convergence_warning_threshold=0.05,
-        fit_anchor="t1",
     )
     assert "fit failed" in title
     assert "bound comparison n/a" in title
 
 
-@pytest.mark.parametrize("plot_variant", ["anchored_t1", "anchored_t0"])
-def test_save_learning_rate_plot_writes_png(tmp_path: Path, plot_variant: str) -> None:
+def test_save_learning_rate_plot_writes_png(tmp_path: Path) -> None:
     epsilon_series = [0.4, 0.25, 0.15, 0.1, 0.08]
-    anchor = "t0" if plot_variant == "anchored_t0" else "t1"
     beta_fit = {
-        "alpha": 0.45,
+        "alpha": 0.23,
         "beta": 0.3,
         "epsilon_inf": 0.05,
         "fit_success": True,
-        "method": f"scipy_anchored_{anchor}",
-        "fit_anchor": anchor,
+        "method": "scipy_anchored_t2",
+        "fit_anchor": "t2",
+        "fit_start_t": FIT_START_T,
     }
-    output_path = tmp_path / f"plot_{plot_variant}.png"
+    output_path = tmp_path / "plot.png"
     save_learning_rate_plot(
         output_path=output_path,
         epsilon_series=epsilon_series,
@@ -71,9 +70,9 @@ def test_save_learning_rate_plot_writes_png(tmp_path: Path, plot_variant: str) -
         beta_gap=-0.51,
         exceeds_hst_bound=False,
         convergence_warning=False,
-        plot_variant=plot_variant,  # type: ignore[arg-type]
-        fit_anchor=anchor,  # type: ignore[arg-type]
     )
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0
 
 
 def test_save_learning_rate_plot_with_convergence_warning(tmp_path: Path) -> None:
@@ -82,11 +81,13 @@ def test_save_learning_rate_plot_with_convergence_warning(tmp_path: Path) -> Non
         output_path=output_path,
         epsilon_series=[0.4, 0.25, 0.15, 0.1, 0.08],
         beta_fit={
-            "alpha": 0.45,
+            "alpha": 0.23,
             "beta": 0.3,
             "epsilon_inf": 0.08,
             "fit_success": True,
-            "method": "scipy_anchored_t1",
+            "method": "scipy_anchored_t2",
+            "fit_anchor": "t2",
+            "fit_start_t": FIT_START_T,
         },
         beta_hst_max=0.81,
         condition_key="n_10/complete",
@@ -97,28 +98,29 @@ def test_save_learning_rate_plot_with_convergence_warning(tmp_path: Path) -> Non
     )
     assert output_path.exists()
     assert output_path.stat().st_size > 0
-    assert output_path.exists()
-    assert output_path.stat().st_size > 0
 
 
-def test_anchored_t0_curves_share_epsilon_at_t0_not_necessarily_at_t1() -> None:
+def test_anchored_t2_curves_share_epsilon_at_t2() -> None:
     epsilon_inf = 0.05
+    alpha = 0.25
     beta_gat = 0.3
     beta_hst = 0.81
-    t = np.array([0.0, 1.0])
-    gat = anchored_t0_decay_values(t, beta=beta_gat, epsilon_inf=epsilon_inf)
-    hst = anchored_t0_decay_values(t, beta=beta_hst, epsilon_inf=epsilon_inf)
-    assert float(gat[0]) == pytest.approx(PRIOR_EPSILON_AT_T0)
-    assert float(hst[0]) == pytest.approx(PRIOR_EPSILON_AT_T0)
-    assert float(gat[1]) != pytest.approx(float(hst[1]))
+    t = np.array([float(FIT_START_T)])
+    gat = anchored_t2_decay_values(
+        t, alpha=alpha, beta=beta_gat, epsilon_inf=epsilon_inf
+    )
+    hst = anchored_t2_decay_values(
+        t, alpha=alpha, beta=beta_hst, epsilon_inf=epsilon_inf
+    )
+    assert float(gat[0]) == pytest.approx(float(hst[0]))
 
 
 def test_learning_rate_plot_path_sanitizes_condition_key() -> None:
-    anchored_t0_path = learning_rate_plot_path(
+    plot_path = learning_rate_plot_path(
         artifacts_dir=Path("artifacts/fair"),
         seed=2,
         condition_key="n_10/ws_p_0.1_seed_2",
     )
-    assert anchored_t0_path == Path(
-        "artifacts/fair/seed_2/plots/n_10__ws_p_0.1_seed_2__anchored_t0.png"
+    assert plot_path == Path(
+        f"artifacts/fair/seed_2/plots/n_10__ws_p_0.1_seed_2__{PLOT_VARIANT}.png"
     )

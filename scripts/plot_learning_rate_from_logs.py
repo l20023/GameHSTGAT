@@ -15,17 +15,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.hst_bound import compute_beta_hst_max
-from src.learning_rate_plots import (
-    PlotVariant,
-    learning_rate_plot_path,
-    save_learning_rate_plot,
-)
-from src.training_pipeline import (
-    DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
-    FitAnchor,
-    fit_beta_from_epsilon,
-    normalize_fit_anchor,
-)
+from src.learning_rate_plots import PLOT_VARIANT, learning_rate_plot_path, save_learning_rate_plot
+from src.training_pipeline import DEFAULT_CONVERGENCE_WARNING_THRESHOLD, fit_beta_from_epsilon
 
 
 def _load_metrics(metrics_path: Path) -> dict[str, Any]:
@@ -78,8 +69,7 @@ def _beta_gap_and_exceed(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Rebuild anchored learning-rate plots from metrics.json. "
-            "Default fit-anchor is t0 (prior epsilon(0)=0.5 at round 0). "
+            "Rebuild t>=2 anchored learning-rate plots from metrics.json. "
             "Use --fit-window-t-max to choose how many leading rounds enter the beta fit."
         )
     )
@@ -87,7 +77,7 @@ def parse_args() -> argparse.Namespace:
         "--metrics",
         type=Path,
         required=True,
-        help="Path to metrics.json (e.g. artifacts/_smoke/seed_1/metrics.json).",
+        help="Path to metrics.json (e.g. artifacts/training_metrics_fair/grid_runs/n_10/q_0p55/seed_0/metrics.json).",
     )
     parser.add_argument(
         "--condition",
@@ -107,16 +97,6 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Last round index included in the fit (1-based, inclusive). "
             "Omit to use auto truncation (perfect-error suffix only)."
-        ),
-    )
-    parser.add_argument(
-        "--fit-anchor",
-        type=str,
-        choices=["t1", "t0"],
-        default="t0",
-        help=(
-            "Decay anchor: t0 uses prior epsilon(0)=0.5 at round 0 (default, matches training); "
-            "t1 uses empirical epsilon(1) at round 1 for sensitivity analysis."
         ),
     )
     parser.add_argument(
@@ -178,12 +158,9 @@ def main() -> None:
         raise ValueError("--signal-quality is required (must match the training run).")
 
     seed = args.seed if args.seed is not None else _infer_seed(metrics_path, payload)
-    fit_anchor: FitAnchor = normalize_fit_anchor(args.fit_anchor)
-    plot_variant: PlotVariant = "anchored_t1" if fit_anchor == "t1" else "anchored_t0"
     beta_fit = fit_beta_from_epsilon(
         [float(v) for v in epsilon_series],
         fit_window_t_max=args.fit_window_t_max,
-        anchor=fit_anchor,
     )
     beta_hst_max = compute_beta_hst_max(float(args.signal_quality))
     convergence_warning = _convergence_warning(beta_fit)
@@ -205,12 +182,11 @@ def main() -> None:
             artifacts_dir=artifacts_dir,
             seed=seed,
             condition_key=condition_key,
-            plot_variant=plot_variant,
         )
         if args.fit_window_t_max is not None:
             safe = condition_key.replace("/", "__")
             output_path = output_path.with_name(
-                f"{safe}__{plot_variant}__tmax_{args.fit_window_t_max}.png"
+                f"{safe}__{PLOT_VARIANT}__tmax_{args.fit_window_t_max}.png"
             )
 
     save_learning_rate_plot(
@@ -223,8 +199,6 @@ def main() -> None:
         beta_gap=beta_gap,
         exceeds_hst_bound=exceeds_hst_bound,
         convergence_warning=convergence_warning,
-        plot_variant=plot_variant,
-        fit_anchor=fit_anchor,
     )
 
     print(f"Wrote plot: {output_path}")
