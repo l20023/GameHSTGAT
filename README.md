@@ -292,6 +292,37 @@ python scripts/animate_episode.py \
 
 Each frame shows per-node prediction ŷ, private signal s, correct/wrong vs θ, and the communicated 1-bit.
 
+### SLURM (one seed, all q=0.55 cells)
+
+Submits **3 array jobs** (one per `n`), each with **3 tasks** (complete, ws_p_0.0, ws_p_0.1) — **9 GPU jobs total** per channel.
+
+**Fair:**
+
+```bash
+SEED=0 bash scripts/run_animate_fair_slurm.sh
+```
+
+**Vector:**
+
+```bash
+SEED=0 bash scripts/run_animate_vector_slurm.sh
+```
+
+Low-level (same as grid pattern):
+
+```bash
+SEED=0 bash scripts/slurm/run_animate_slurms.sh 3 fair_1bit
+```
+
+Optional: only `n=1000`, or longer walltime if jobs time out:
+
+```bash
+SEED=0 NUM_NODES_LIST=1000 SBATCH_TIME_N1000=12:00:00 \
+  bash scripts/slurm/run_animate_slurms.sh 3 fair_1bit
+```
+
+Outputs: `artifacts/checkpoints/<mode>/n_*/q_0p55/<topo>/seed_<SEED>.pt` and matching `artifacts/animations/.../*.gif`.
+
 For a full technical walkthrough of the model and design decisions, see `MODEL_README.md`.
 
 ## Interpreting HST comparisons
