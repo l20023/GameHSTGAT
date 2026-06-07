@@ -424,5 +424,18 @@
     "max_horizon": 50,
     "train_episodes": 5000
   },
-  "evaluation_plot": "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0__anchored_t2.png"
+  "evaluation_plots": [
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4242__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4243__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4244__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4245__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4246__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4247__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4248__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4249__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4250__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4251__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4252__anchored_t2.png",
+    "artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0_ep4253__anchored_t2.png"
+  ]
 }

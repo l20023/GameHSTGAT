@@ -228,14 +228,22 @@ def pack_correct_bitmap(correct: np.ndarray) -> str:
     return base64.b64encode(np.packbits(flat).tobytes()).decode("ascii")
 
 
-def _episode_viewer_entry(trace: EpisodeTrace, *, episode_seed: int) -> dict[str, Any]:
-    return {
+def _episode_viewer_entry(
+    trace: EpisodeTrace,
+    *,
+    episode_seed: int,
+    eval_plot: str | None = None,
+) -> dict[str, Any]:
+    entry: dict[str, Any] = {
         "episode_seed": episode_seed,
         "theta": trace.theta,
         "correct_shape": [trace.max_horizon, trace.num_nodes],
         "correct_packed": pack_correct_bitmap(trace.correct),
         "consensus": compute_unanimous_consensus(trace),
     }
+    if eval_plot:
+        entry["eval_plot"] = eval_plot
+    return entry
 
 
 def rollouts_cache_path(output_path: str | Path) -> Path:
@@ -339,6 +347,7 @@ def _viewer_payload(
     graph: nx.Graph,
     *,
     episode_seeds: list[int],
+    eval_plots: dict[int, str] | None = None,
 ) -> dict[str, Any]:
     if len(traces) != len(episode_seeds):
         raise ValueError("traces and episode_seeds must have the same length.")
@@ -359,7 +368,11 @@ def _viewer_payload(
         "edge_hint": edge_hint,
         "edge_count": edge_count,
         "episodes": [
-            _episode_viewer_entry(trace, episode_seed=seed)
+            _episode_viewer_entry(
+                trace,
+                episode_seed=seed,
+                eval_plot=(eval_plots or {}).get(seed),
+            )
             for trace, seed in zip(traces, episode_seeds, strict=True)
         ],
     }
@@ -797,6 +810,13 @@ function triggerNodeFlash(correct) {{
   }});
 }}
 
+function updateEvalPlot() {{
+  const evalImg = document.getElementById('eval-plot');
+  if (!evalImg) return;
+  const plot = getEpisode().eval_plot;
+  if (plot) evalImg.src = plot;
+}}
+
 function setEpisode(idx) {{
   if (timer) {{
     clearInterval(timer);
@@ -809,6 +829,7 @@ function setEpisode(idx) {{
   currentRound = null;
   prevCorrect = null;
   updateMetaLine();
+  updateEvalPlot();
   renderRound(1);
 }}
 
@@ -907,13 +928,13 @@ def _eval_plot_section(eval_plot_filename: str | None) -> str:
     if not eval_plot_filename:
         return ""
     return f"""<details class="eval-panel" open>
-  <summary>Test-set error decay (anchored at t=2)</summary>
+  <summary>Error decay for selected signal (anchored at t=2)</summary>
   <p class="eval-caption">
-    Empirical error rate ε(t) on held-out test episodes for this checkpoint.
-    GAT and HST curves share α and ε∞ at <strong>t=2</strong>; fits use rounds t≥2
-    (after gossip has mixed into the GAT input).
+    Empirical ε(t) for the <strong>currently selected</strong> private-signal draw
+    (this episode rollout, not a test-set mean). GAT and HST curves share α and ε∞
+    at <strong>t=2</strong>; fits use rounds t≥2.
   </p>
-  <img class="eval-plot" src="{eval_plot_filename}" alt="Anchored t=2 learning-rate plot"/>
+  <img id="eval-plot" class="eval-plot" src="{eval_plot_filename}" alt="Anchored t=2 learning-rate plot"/>
 </details>"""
 
 
@@ -923,17 +944,34 @@ def save_interactive_episode_view(
     output_path: str | Path,
     *,
     episode_seeds: list[int] | None = None,
-    eval_plot_filename: str | None = None,
+    condition_key: str | None = None,
 ) -> Path:
     """Write a self-contained interactive HTML viewer with scrubbable timeline."""
+    from .learning_rate_plots import stage_per_episode_eval_plots
+
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     traces = trace if isinstance(trace, list) else [trace]
     seeds = episode_seeds if episode_seeds is not None else [0] * len(traces)
     if len(seeds) != len(traces):
         raise ValueError("episode_seeds length must match number of traces.")
-    payload = _viewer_payload(traces, graph, episode_seeds=seeds)
     trace0 = traces[0]
+    eval_plots: dict[int, str] = {}
+    if condition_key is not None:
+        eval_plots = stage_per_episode_eval_plots(
+            traces=traces,
+            episode_seeds=seeds,
+            html_path=output,
+            signal_quality=trace0.signal_quality,
+            condition_key=condition_key,
+        )
+    payload = _viewer_payload(
+        traces,
+        graph,
+        episode_seeds=seeds,
+        eval_plots=eval_plots,
+    )
+    first_eval_plot = eval_plots.get(seeds[0]) if eval_plots else None
     meta = (
         f"n={trace0.num_nodes} · q={trace0.signal_quality:.2f} · "
         f"{trace0.topology}"
@@ -943,7 +981,7 @@ def save_interactive_episode_view(
         meta=meta,
         max_horizon=trace0.max_horizon,
         large_graph_threshold=LARGE_GRAPH_NODE_THRESHOLD,
-        eval_plot_section=_eval_plot_section(eval_plot_filename),
+        eval_plot_section=_eval_plot_section(first_eval_plot),
         payload_json=json.dumps(payload, separators=(",", ":")),
     )
     output.write_text(html, encoding="utf-8")

@@ -102,6 +102,7 @@ def test_save_interactive_episode_view_writes_html(tmp_path: Path) -> None:
     assert '"correct_packed"' in html
     assert '"correct_shape"' in html
     assert "function unpackCorrect" in html
+    assert "function updateEvalPlot" in html
     assert "edge-canvas" in html
     assert "function drawEdges" in html
     assert 'id="prev-btn"' in html

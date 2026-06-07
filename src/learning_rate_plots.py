@@ -413,6 +413,87 @@ def resolve_anchored_t2_plot_path(
     return plot_path if plot_path.exists() else None
 
 
+def _convergence_warning_from_fit(
+    beta_fit: dict[str, Any],
+    *,
+    threshold: float,
+) -> bool:
+    epsilon_inf = beta_fit.get("epsilon_inf")
+    return bool(
+        isinstance(epsilon_inf, (int, float))
+        and np.isfinite(float(epsilon_inf))
+        and float(epsilon_inf) > threshold
+    )
+
+
+def _beta_gap_and_exceed_from_fit(
+    beta_fit: dict[str, Any],
+    *,
+    beta_hst_max: float,
+    convergence_warning: bool,
+) -> tuple[float | None, bool | None]:
+    if not bool(beta_fit.get("fit_success", False)):
+        return None, None
+    beta_raw = beta_fit.get("beta")
+    if not isinstance(beta_raw, (int, float)) or not np.isfinite(float(beta_raw)):
+        return None, None
+    gap = float(beta_raw) - beta_hst_max
+    exceeds = (gap > 0.0) and not convergence_warning
+    return gap, exceeds
+
+
+def stage_per_episode_eval_plots(
+    *,
+    traces: list[Any],
+    episode_seeds: list[int],
+    html_path: str | Path,
+    signal_quality: float,
+    condition_key: str,
+) -> dict[int, str]:
+    """Render one anchored_t2 PNG per signal episode from its rollout error curve."""
+    from .hst_bound import compute_beta_hst_max
+    from .training_pipeline import (
+        DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
+        fit_beta_from_epsilon,
+    )
+
+    if len(traces) != len(episode_seeds):
+        raise ValueError("traces and episode_seeds must have the same length.")
+
+    html = Path(html_path)
+    legacy_plot = html.with_name(f"{html.stem}__{PLOT_VARIANT}.png")
+    if legacy_plot.exists():
+        legacy_plot.unlink()
+    beta_hst_max = compute_beta_hst_max(float(signal_quality))
+    mapping: dict[int, str] = {}
+    for trace, seed in zip(traces, episode_seeds, strict=True):
+        epsilon_series = [float(v) for v in trace.error_rates]
+        beta_fit = fit_beta_from_epsilon(epsilon_series)
+        convergence_warning = _convergence_warning_from_fit(
+            beta_fit,
+            threshold=DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
+        )
+        beta_gap, exceeds_hst_bound = _beta_gap_and_exceed_from_fit(
+            beta_fit,
+            beta_hst_max=beta_hst_max,
+            convergence_warning=convergence_warning,
+        )
+        dest = html.with_name(f"{html.stem}_ep{seed}__{PLOT_VARIANT}.png")
+        save_learning_rate_plot(
+            output_path=dest,
+            epsilon_series=epsilon_series,
+            beta_fit=beta_fit,
+            beta_hst_max=beta_hst_max,
+            condition_key=f"{condition_key} · signal ep={seed}",
+            signal_quality=float(signal_quality),
+            beta_gap=beta_gap,
+            exceeds_hst_bound=exceeds_hst_bound,
+            convergence_warning=convergence_warning,
+        )
+        mapping[int(seed)] = dest.name
+    return mapping
+
+
 def stage_anchored_t2_plot_for_viewer(
     *,
     communication_mode: str,
@@ -450,5 +531,6 @@ __all__ = [
     "resolve_anchored_t2_plot_path",
     "save_learning_rate_plot",
     "stage_anchored_t2_plot_for_viewer",
+    "stage_per_episode_eval_plots",
     "training_metrics_root",
 ]
