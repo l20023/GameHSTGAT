@@ -108,15 +108,22 @@ def viewer_edge_payload(
 
 
 def compute_unanimous_consensus(trace: EpisodeTrace) -> dict[str, Any]:
-    """Per-round unanimous consensus flags and first unanimous round (1-based)."""
+    """Per-round gossip consensus flags and first unanimous round (1-based).
+
+    Round 1 uses only each node's private signal (outbound messages are still
+    zero), so it is a prior belief, not post-gossip consensus. Unanimous
+    consensus is therefore tracked from round 2 onward.
+    """
     per_round: list[dict[str, Any]] = []
     first_unanimous_t: int | None = None
     first_unanimous_correct: bool | None = None
 
     for t in range(trace.max_horizon):
         preds = trace.predictions[t]
-        unanimous = bool(preds.min() == preds.max())
-        label = int(preds[0]) if unanimous else -1
+        all_same = bool(preds.min() == preds.max())
+        label = int(preds[0]) if all_same else -1
+        after_gossip = t > 0
+        unanimous = all_same and after_gossip
         unanimous_correct = unanimous and label == trace.theta
         unanimous_wrong = unanimous and label != trace.theta
         _, freq = np.unique(preds, return_counts=True)
@@ -124,6 +131,7 @@ def compute_unanimous_consensus(trace: EpisodeTrace) -> dict[str, Any]:
         per_round.append(
             {
                 "t": t + 1,
+                "after_gossip": after_gossip,
                 "unanimous": unanimous,
                 "unanimous_correct": unanimous_correct,
                 "unanimous_wrong": unanimous_wrong,
@@ -720,6 +728,9 @@ function buildTimeline() {{
 function consensusText(tIdx) {{
   const consensus = getEpisode().consensus;
   const row = consensus.per_round[tIdx];
+  if (!row.after_gossip) {{
+    return 'Prior belief from <strong>private signal only</strong> — no gossip yet';
+  }}
   const first = consensus.first_unanimous_t;
   const firstOk = consensus.first_unanimous_correct;
   let line = '';
@@ -802,7 +813,9 @@ function renderRound(tOneBased) {{
     `<strong>θ=${{ep.theta}}</strong> &nbsp;|&nbsp; error=${{(err * 100).toFixed(1)}}%` +
     ` &nbsp;|&nbsp; agreement=${{(agree * 100).toFixed(1)}}%<br/>` +
     consensusText(tIdx);
-  roundLabel.textContent = `Round ${{tOneBased}} / ${{T}}`;
+  roundLabel.textContent = tOneBased === 1
+    ? `Round 1 / ${{T}} (prior)`
+    : `Round ${{tOneBased}} / ${{T}}`;
   slider.value = String(tOneBased);
   playhead.style.left = ((tOneBased - 0.5) / T) * 100 + '%';
   prevBtn.disabled = tOneBased <= 1;
@@ -954,11 +967,14 @@ def save_episode_animation(
 
         row = consensus["per_round"][t]
         err = 1.0 - trace.correct[t].mean()
+        round_tag = " (prior)" if t == 0 else ""
         title = (
-            f"Round {t + 1}/{trace.max_horizon}  |  θ={trace.theta}  |  "
+            f"Round {t + 1}/{trace.max_horizon}{round_tag}  |  θ={trace.theta}  |  "
             f"error={err:.0%}"
         )
-        if row["unanimous"]:
+        if not row["after_gossip"]:
+            title += "  |  private signal only"
+        elif row["unanimous"]:
             tag = "correct" if row["unanimous_correct"] else "wrong"
             title += f"  |  unanimous ({tag})"
         elif consensus["first_unanimous_t"] is not None and t + 1 < consensus["first_unanimous_t"]:

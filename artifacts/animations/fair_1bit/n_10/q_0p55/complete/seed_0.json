@@ -6,6 +6,7 @@
     "per_round": [
       {
         "t": 1,
+        "after_gossip": false,
         "unanimous": false,
         "unanimous_correct": false,
         "unanimous_wrong": false,
@@ -13,6 +14,7 @@
       },
       {
         "t": 2,
+        "after_gossip": true,
         "unanimous": false,
         "unanimous_correct": false,
         "unanimous_wrong": false,
@@ -20,6 +22,7 @@
       },
       {
         "t": 3,
+        "after_gossip": true,
         "unanimous": false,
         "unanimous_correct": false,
         "unanimous_wrong": false,
@@ -27,6 +30,7 @@
       },
       {
         "t": 4,
+        "after_gossip": true,
         "unanimous": false,
         "unanimous_correct": false,
         "unanimous_wrong": false,
@@ -34,6 +38,7 @@
       },
       {
         "t": 5,
+        "after_gossip": true,
         "unanimous": false,
         "unanimous_correct": false,
         "unanimous_wrong": false,
@@ -41,6 +46,7 @@
       },
       {
         "t": 6,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -48,6 +54,7 @@
       },
       {
         "t": 7,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -55,6 +62,7 @@
       },
       {
         "t": 8,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -62,6 +70,7 @@
       },
       {
         "t": 9,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -69,6 +78,7 @@
       },
       {
         "t": 10,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -76,6 +86,7 @@
       },
       {
         "t": 11,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -83,6 +94,7 @@
       },
       {
         "t": 12,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -90,6 +102,7 @@
       },
       {
         "t": 13,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -97,6 +110,7 @@
       },
       {
         "t": 14,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -104,6 +118,7 @@
       },
       {
         "t": 15,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -111,6 +126,7 @@
       },
       {
         "t": 16,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -118,6 +134,7 @@
       },
       {
         "t": 17,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -125,6 +142,7 @@
       },
       {
         "t": 18,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -132,6 +150,7 @@
       },
       {
         "t": 19,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -139,6 +158,7 @@
       },
       {
         "t": 20,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -146,6 +166,7 @@
       },
       {
         "t": 21,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -153,6 +174,7 @@
       },
       {
         "t": 22,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -160,6 +182,7 @@
       },
       {
         "t": 23,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -167,6 +190,7 @@
       },
       {
         "t": 24,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -174,6 +198,7 @@
       },
       {
         "t": 25,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -181,6 +206,7 @@
       },
       {
         "t": 26,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -188,6 +214,7 @@
       },
       {
         "t": 27,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -195,6 +222,7 @@
       },
       {
         "t": 28,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -202,6 +230,7 @@
       },
       {
         "t": 29,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -209,6 +238,7 @@
       },
       {
         "t": 30,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -216,6 +246,7 @@
       },
       {
         "t": 31,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -223,6 +254,7 @@
       },
       {
         "t": 32,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -230,6 +262,7 @@
       },
       {
         "t": 33,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -237,6 +270,7 @@
       },
       {
         "t": 34,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -244,6 +278,7 @@
       },
       {
         "t": 35,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -251,6 +286,7 @@
       },
       {
         "t": 36,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -258,6 +294,7 @@
       },
       {
         "t": 37,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -265,6 +302,7 @@
       },
       {
         "t": 38,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -272,6 +310,7 @@
       },
       {
         "t": 39,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -279,6 +318,7 @@
       },
       {
         "t": 40,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -286,6 +326,7 @@
       },
       {
         "t": 41,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -293,6 +334,7 @@
       },
       {
         "t": 42,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -300,6 +342,7 @@
       },
       {
         "t": 43,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -307,6 +350,7 @@
       },
       {
         "t": 44,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -314,6 +358,7 @@
       },
       {
         "t": 45,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -321,6 +366,7 @@
       },
       {
         "t": 46,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -328,6 +374,7 @@
       },
       {
         "t": 47,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -335,6 +382,7 @@
       },
       {
         "t": 48,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -342,6 +390,7 @@
       },
       {
         "t": 49,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,
@@ -349,6 +398,7 @@
       },
       {
         "t": 50,
+        "after_gossip": true,
         "unanimous": true,
         "unanimous_correct": true,
         "unanimous_wrong": false,

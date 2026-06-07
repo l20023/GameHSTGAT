@@ -70,6 +70,15 @@ def test_compute_unanimous_consensus_finds_first_round() -> None:
     assert consensus["per_round"][4]["unanimous"] is True
 
 
+def test_compute_unanimous_consensus_ignores_prior_round() -> None:
+    trace = _synthetic_trace(theta=1, num_nodes=4, max_horizon=4)
+    trace.predictions[0, :] = 1
+    consensus = compute_unanimous_consensus(trace)
+    assert consensus["per_round"][0]["unanimous"] is False
+    assert consensus["per_round"][0]["after_gossip"] is False
+    assert consensus["first_unanimous_t"] != 1
+
+
 def test_compute_unanimous_consensus_wrong_unanimous() -> None:
     trace = _synthetic_trace(theta=0, num_nodes=4, max_horizon=6)
     consensus = compute_unanimous_consensus(trace)
