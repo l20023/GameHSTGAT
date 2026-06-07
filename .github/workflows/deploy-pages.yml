@@ -1,5 +1,5 @@
-# Publish the repo (including artifacts/animations/*.html) to GitHub Pages
-# so interactive viewers work in the browser from README links.
+# Publish interactive HTML viewers to GitHub Pages.
+# One-time: repo Settings → Pages → Build and deployment → Source: GitHub Actions
 name: Deploy GitHub Pages
 
 on:
@@ -29,10 +29,17 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Build site artifact
+        run: |
+          mkdir -p _site/docs _site/artifacts
+          cp -r docs/. _site/docs/
+          cp -r artifacts/animations _site/artifacts/animations
+          cp index.html .nojekyll _site/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment

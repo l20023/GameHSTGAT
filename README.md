@@ -305,7 +305,16 @@ bash scripts/render_all_animations.sh
 
 ### Interactive viewers on GitHub
 
-GitHub README cannot run JavaScript, so viewers are hosted via **[GitHub Pages](https://pages.github.com/)** (auto-deployed from `main` by [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)).
+GitHub README cannot run JavaScript, so viewers are hosted via **[GitHub Pages](https://pages.github.com/)** (deployed from `main` by [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)).
+
+**One-time setup (if you see a Pages 404):**
+
+1. Open **Settings → Pages** on [github.com/l20023/GameHSTGAT](https://github.com/l20023/GameHSTGAT/settings/pages)
+2. Under **Build and deployment**, set **Source** to **GitHub Actions** (not “Deploy from a branch”)
+3. Push to `main` or re-run the **Deploy GitHub Pages** workflow under **Actions**
+4. After a green run (~1–2 min), open the launcher below
+
+If **Setup Pages** fails in Actions, step 2 was not done yet.
 
 **[Interactive launcher](https://l20023.github.io/GameHSTGAT/docs/viewers.html)** — pick **model** (fair_1bit / vector), **size** (10 / 100 / 1000), and **topology** (complete / ws_p_0.0 / ws_p_0.1). URL hash is shareable, e.g. `viewers.html#vector|n100|ws_p_0.1`.
 
