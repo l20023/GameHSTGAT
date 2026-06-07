@@ -822,7 +822,7 @@
     "num_heads": 2,
     "dropout": 0.1,
     "max_horizon": 100,
-    "train_episodes": 10000
+    "train_episodes": 5000
   },
   "evaluation_plots": [
     "artifacts/animations/fair_1bit/n_1000/q_0p55/ws_p_0.0/seed_0_ep4242__anchored_t2.png",

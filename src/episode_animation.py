@@ -26,6 +26,9 @@ COLOR_EDGE = "#cbd5e1"
 # Above this count, individual edges are omitted (complete graphs use a ring hint).
 MAX_VIEWER_EDGES = 2500
 LARGE_GRAPH_NODE_THRESHOLD = 150
+VIEWER_NODE_RING_SCALE = 0.72
+VIEWER_PRIVATE_RING_SCALE = 1.12
+VIEWER_SVG_MARGIN = 1.34
 
 
 @dataclass(frozen=True)
@@ -447,21 +450,11 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .node {{ stroke: none; }}
   .node.correct {{ fill: var(--green); }}
   .node.wrong {{ fill: var(--red); }}
-  .private-ring-guide {{
-    fill: none;
-    stroke: #475569;
+  .private-signal {{
+    stroke: #0f172a;
     stroke-width: 0.04;
-    stroke-dasharray: 0.12 0.1;
-    opacity: 0.45;
-    pointer-events: none;
+    opacity: 1;
   }}
-  .private-link {{
-    stroke: #475569;
-    stroke-width: 0.03;
-    opacity: 0.35;
-    pointer-events: none;
-  }}
-  .private-signal {{ stroke: #1e293b; stroke-width: 0.03; }}
   .private-signal.s0 {{ fill: #38bdf8; }}
   .private-signal.s1 {{ fill: #fbbf24; }}
   .graph-legend {{
@@ -617,18 +610,16 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <div id="graph-wrap">
   <div class="graph-stage">
     <canvas id="edge-canvas" aria-hidden="true"></canvas>
-    <svg id="graph" viewBox="-1.22 -1.22 2.44 2.44" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-      <circle id="private-ring-guide" class="private-ring-guide" cx="0" cy="0" r="{private_ring_radius}"/>
-      <g id="private-links"></g>
+    <svg id="graph" viewBox="-{svg_margin} -{svg_margin} {svg_size} {svg_size}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
       <g id="private-signals"></g>
       <g id="nodes"></g>
     </svg>
   </div>
   <p class="graph-legend">
-    <span class="legend-item"><span class="legend-swatch pred-correct"></span> prediction correct</span>
-    <span class="legend-item"><span class="legend-swatch pred-wrong"></span> prediction wrong</span>
-    <span class="legend-item"><span class="legend-swatch priv-0"></span> private signal 0 (outer)</span>
-    <span class="legend-item"><span class="legend-swatch priv-1"></span> private signal 1 (outer)</span>
+    <span class="legend-item"><span class="legend-swatch pred-correct"></span> inner: prediction correct</span>
+    <span class="legend-item"><span class="legend-swatch pred-wrong"></span> inner: prediction wrong</span>
+    <span class="legend-item"><span class="legend-swatch priv-0"></span> outer: private signal 0</span>
+    <span class="legend-item"><span class="legend-swatch priv-1"></span> outer: private signal 1</span>
   </p>
 </div>
 <div class="controls">
@@ -657,7 +648,6 @@ const DATA = {payload_json};
 
 const svg = document.getElementById('graph');
 const edgeCanvas = document.getElementById('edge-canvas');
-const privateLinksG = document.getElementById('private-links');
 const privateG = document.getElementById('private-signals');
 const nodesG = document.getElementById('nodes');
 const slider = document.getElementById('round-slider');
@@ -671,28 +661,20 @@ const episodeSelect = document.getElementById('episode-select');
 const newSignalBtn = document.getElementById('new-signal-btn');
 const metaEl = document.querySelector('.meta');
 
-const scale = 0.92;
-const privateRingScale = scale * 1.18;
-const r = (DATA.node_radius / 520) * scale;
-const privateR = Math.max(r * 0.42, 0.01);
+const nodeRingScale = {node_ring_scale};
+const privateRingScale = {private_ring_scale};
+const r = (DATA.node_radius / 520) * nodeRingScale;
+const privateR = Math.max(r * 0.62, 0.012);
 const nodeEls = [];
 const privateEls = [];
 
 const privateFragment = document.createDocumentFragment();
 const nodeFragment = document.createDocumentFragment();
-const linkFragment = document.createDocumentFragment();
 DATA.positions.forEach((p, i) => {{
-  const cx = p[0] * scale;
-  const cy = p[1] * scale;
+  const cx = p[0] * nodeRingScale;
+  const cy = p[1] * nodeRingScale;
   const px = p[0] * privateRingScale;
   const py = p[1] * privateRingScale;
-  const link = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  link.setAttribute('x1', String(cx));
-  link.setAttribute('y1', String(cy));
-  link.setAttribute('x2', String(px));
-  link.setAttribute('y2', String(py));
-  link.classList.add('private-link');
-  linkFragment.appendChild(link);
   const priv = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
   priv.setAttribute('cx', String(px));
   priv.setAttribute('cy', String(py));
@@ -710,18 +692,16 @@ DATA.positions.forEach((p, i) => {{
   nodeFragment.appendChild(circle);
   nodeEls.push(circle);
 }});
-privateLinksG.appendChild(linkFragment);
 privateG.appendChild(privateFragment);
 nodesG.appendChild(nodeFragment);
-if (DATA.num_nodes > {large_graph_threshold}) privateLinksG.style.display = 'none';
 
 function edgeLineCoords(u, v) {{
   const p0 = DATA.positions[u];
   const p1 = DATA.positions[v];
-  const x0 = p0[0] * scale;
-  const y0 = p0[1] * scale;
-  const x1 = p1[0] * scale;
-  const y1 = p1[1] * scale;
+  const x0 = p0[0] * nodeRingScale;
+  const y0 = p0[1] * nodeRingScale;
+  const x1 = p1[0] * nodeRingScale;
+  const y1 = p1[1] * nodeRingScale;
   const dx = x1 - x0;
   const dy = y1 - y0;
   const len = Math.hypot(dx, dy);
@@ -759,7 +739,7 @@ function drawEdges() {{
 
   if (DATA.edge_hint === 'complete' || DATA.edge_hint === 'dense') {{
     const [cx, cy] = viewToCanvas(0, 0);
-    const [rx, ry] = viewToCanvas(scale, 0);
+    const [rx, ry] = viewToCanvas(nodeRingScale, 0);
     const ringR = Math.hypot(rx - cx, ry - cy);
     ctx.beginPath();
     ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
@@ -946,12 +926,15 @@ function renderRound(tOneBased) {{
     el.classList.toggle('wrong', !correct[i]);
   }});
   const privateRow = ep.private ? ep.private[tIdx] : null;
-  if (privateRow) {{
-    privateEls.forEach((el, i) => {{
-      el.classList.toggle('s0', privateRow[i] === 0);
-      el.classList.toggle('s1', privateRow[i] === 1);
-    }});
-  }}
+  privateEls.forEach((el, i) => {{
+    if (!privateRow) {{
+      el.classList.remove('s0', 's1');
+      return;
+    }}
+    const bit = Number(privateRow[i]);
+    el.classList.toggle('s0', bit === 0);
+    el.classList.toggle('s1', bit === 1);
+  }});
   if (roundChanged) triggerNodeFlash(correct);
   prevCorrect = correct.slice();
   const err = 1 - correct.filter(Boolean).length / DATA.num_nodes;
@@ -1095,7 +1078,10 @@ def save_interactive_episode_view(
         title=meta,
         meta=meta,
         max_horizon=trace0.max_horizon,
-        private_ring_radius=0.92 * 1.18,
+        svg_margin=VIEWER_SVG_MARGIN,
+        svg_size=VIEWER_SVG_MARGIN * 2,
+        node_ring_scale=VIEWER_NODE_RING_SCALE,
+        private_ring_scale=VIEWER_PRIVATE_RING_SCALE,
         large_graph_threshold=LARGE_GRAPH_NODE_THRESHOLD,
         eval_plot_section=_eval_plot_section(first_eval_plot),
         summary_plot_section=_summary_plot_section(summary_plot_filename),
@@ -1223,6 +1209,9 @@ def load_checkpoint(
 __all__ = [
     "EpisodeTrace",
     "MAX_VIEWER_EDGES",
+    "VIEWER_NODE_RING_SCALE",
+    "VIEWER_PRIVATE_RING_SCALE",
+    "VIEWER_SVG_MARGIN",
     "circular_layout",
     "compute_unanimous_consensus",
     "layout_positions",
