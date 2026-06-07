@@ -259,38 +259,73 @@ python scripts/summarize_metrics.py \
   --aggregate-plots-dir artifacts/training_metrics_fair/grid_runs/aggregate_plots
 ```
 
-### Episode animation (cluster → local)
+### Interactive episode viewer (cluster → local)
 
-Grid training saves **metrics only**, not model weights. To animate per-node predictions:
+Grid training saves **metrics only**, not model weights. The default export is an **interactive HTML** file:
 
-**1. On the cluster** — train one cell and save a checkpoint:
+- Nodes on a **circle** (size scales with `n`), **thin edges**
+- **Green** = correct vs θ, **red** = wrong
+- **Scrubbable timeline** + Play/Pause
+- **Unanimous consensus** status and first consensus round marked on the timeline
+
+**1. On the cluster** — train one cell and save a checkpoint + viewer:
 
 ```bash
 python scripts/animate_episode.py \
   --seed 0 --num-nodes 10 --signal-quality 0.55 --topology complete \
-  --train-episodes 5000 \
-  --save-checkpoint artifacts/checkpoints/fair_1bit/n_10/q_0p55/complete/seed_0.pt
+  --train-episodes 5000 --format html \
+  --save-checkpoint artifacts/checkpoints/fair_1bit/n_10/q_0p55/complete/seed_0.pt \
+  --output artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0.html
 ```
 
-**2. Download** checkpoint + graph cache:
+**2. Download** checkpoint + HTML (+ graph cache if regenerating locally):
 
 ```bash
 scp cluster:.../artifacts/checkpoints/.../seed_0.pt ./artifacts/checkpoints/...
-scp -r cluster:.../artifacts/graphs ./artifacts/graphs
+scp cluster:.../artifacts/animations/.../seed_0.html ./artifacts/animations/...
 ```
 
-**3. Locally** — render GIF (no training):
+**3. Locally** — regenerate viewer from checkpoint (no training):
 
 ```bash
 python scripts/animate_episode.py \
   --checkpoint artifacts/checkpoints/fair_1bit/n_10/q_0p55/complete/seed_0.pt \
   --skip-train \
   --seed 0 --num-nodes 10 --signal-quality 0.55 --topology complete \
-  --episode-seed 4242 \
-  --output artifacts/animations/demo.gif
+  --format html --output artifacts/animations/demo.html
 ```
 
-Each frame shows per-node prediction ŷ, private signal s, correct/wrong vs θ, and the communicated 1-bit.
+Open `demo.html` in a browser. Optional legacy GIF: `--format gif` or `--format both`.
+
+Regenerate all checkpoint viewers after template changes:
+
+```bash
+bash scripts/render_all_animations.sh
+```
+
+### Interactive viewers on GitHub
+
+GitHub README cannot run JavaScript, so viewers are hosted via **[GitHub Pages](https://pages.github.com/)** (auto-deployed from `main` by [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)).
+
+**[Interactive launcher](https://l20023.github.io/GameHSTGAT/docs/viewers.html)** — pick **model** (fair_1bit / vector), **size** (10 / 100 / 1000), and **topology** (complete / ws_p_0.0 / ws_p_0.1). URL hash is shareable, e.g. `viewers.html#vector|n100|ws_p_0.1`.
+
+Inside each viewer:
+
+- scrub rounds with slider, timeline, **← / →**, or Play
+- **New signal** — switches to another pre-rendered private-signal episode (12 bundled per checkpoint; true re-roll needs `animate_episode.py` locally)
+
+All experiments (q=0.55, training seed 0) — click to open full-screen on Pages:
+
+| Channel | n | Complete | WS p=0.0 | WS p=0.1 |
+|---------|---|----------|----------|----------|
+| **fair_1bit** | 10 | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/fair_1bit/n_10/q_0p55/complete/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/fair_1bit/n_10/q_0p55/ws_p_0.0/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/fair_1bit/n_10/q_0p55/ws_p_0.1/seed_0.html) |
+| **fair_1bit** | 100 | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/fair_1bit/n_100/q_0p55/complete/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/fair_1bit/n_100/q_0p55/ws_p_0.0/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/fair_1bit/n_100/q_0p55/ws_p_0.1/seed_0.html) |
+| **fair_1bit** | 1000 | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/fair_1bit/n_1000/q_0p55/complete/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/fair_1bit/n_1000/q_0p55/ws_p_0.0/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/fair_1bit/n_1000/q_0p55/ws_p_0.1/seed_0.html) |
+| **vector** | 10 | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/vector/n_10/q_0p55/complete/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/vector/n_10/q_0p55/ws_p_0.0/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/vector/n_10/q_0p55/ws_p_0.1/seed_0.html) |
+| **vector** | 100 | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/vector/n_100/q_0p55/complete/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/vector/n_100/q_0p55/ws_p_0.0/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/vector/n_100/q_0p55/ws_p_0.1/seed_0.html) |
+| **vector** | 1000 | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/vector/n_1000/q_0p55/complete/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/vector/n_1000/q_0p55/ws_p_0.0/seed_0.html) | [viewer](https://l20023.github.io/GameHSTGAT/artifacts/animations/vector/n_1000/q_0p55/ws_p_0.1/seed_0.html) |
+
+Source files: `artifacts/animations/<channel>/n_<N>/q_0p55/<topology>/seed_0.html` (commit to repo for Pages). Locally, open any `.html` file in a browser.
 
 ### SLURM (one seed, all q=0.55 cells)
 
@@ -321,7 +356,7 @@ SEED=0 NUM_NODES_LIST=1000 SBATCH_TIME_N1000=12:00:00 \
   bash scripts/slurm/run_animate_slurms.sh 3 fair_1bit
 ```
 
-Outputs: `artifacts/checkpoints/<mode>/n_*/q_0p55/<topo>/seed_<SEED>.pt` and matching `artifacts/animations/.../*.gif`.
+Outputs: `artifacts/checkpoints/<mode>/n_*/q_0p55/<topo>/seed_<SEED>.pt` and matching `artifacts/animations/.../*.html` (open in browser).
 
 For a full technical walkthrough of the model and design decisions, see `MODEL_README.md`.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,12 +13,18 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from matplotlib.animation import FuncAnimation, PillowWriter
-from matplotlib.patches import Patch
 from torch_geometric.data import Data
 
 from src.models.recurrent_gat_agent import RecurrentGATAgent
 from src.signal_generator import PrivateSignalGenerator
 from src.training_pipeline import _episode_to_model_inputs
+
+COLOR_CORRECT = "#22c55e"
+COLOR_WRONG = "#ef4444"
+COLOR_EDGE = "#cbd5e1"
+# Above this count, individual edges are omitted (complete graphs use a ring hint).
+MAX_VIEWER_EDGES = 2500
+LARGE_GRAPH_NODE_THRESHOLD = 150
 
 
 @dataclass(frozen=True)
@@ -64,13 +71,82 @@ def pyg_to_networkx(graph_data: Data) -> nx.Graph:
     return graph
 
 
+def circular_layout(
+    num_nodes: int, *, radius: float = 1.0
+) -> dict[int, tuple[float, float]]:
+    """Place nodes evenly on a circle (node i at angle 2π·i/N, starting at top)."""
+    positions: dict[int, tuple[float, float]] = {}
+    for i in range(num_nodes):
+        angle = 2.0 * np.pi * i / num_nodes - np.pi / 2.0
+        positions[i] = (radius * float(np.cos(angle)), radius * float(np.sin(angle)))
+    return positions
+
+
+def node_radius_for_count(num_nodes: int) -> float:
+    """SVG node radius scaled so large graphs remain readable."""
+    return float(np.clip(80.0 / np.sqrt(max(num_nodes, 1)), 3.0, 14.0))
+
+
+def graph_edge_list(graph: nx.Graph) -> list[list[int]]:
+    return [[int(u), int(v)] for u, v in graph.edges()]
+
+
+def viewer_edge_payload(
+    graph: nx.Graph,
+    *,
+    topology: str,
+) -> tuple[list[list[int]], str, int]:
+    """Return edges for the HTML viewer, hint mode, and true edge count."""
+    edge_count = graph.number_of_edges()
+    topo_lower = topology.lower()
+    if "complete" in topo_lower:
+        return [], "complete", edge_count
+    if edge_count > MAX_VIEWER_EDGES:
+        return [], "dense", edge_count
+    return graph_edge_list(graph), "graph", edge_count
+
+
+def compute_unanimous_consensus(trace: EpisodeTrace) -> dict[str, Any]:
+    """Per-round unanimous consensus flags and first unanimous round (1-based)."""
+    per_round: list[dict[str, Any]] = []
+    first_unanimous_t: int | None = None
+    first_unanimous_correct: bool | None = None
+
+    for t in range(trace.max_horizon):
+        preds = trace.predictions[t]
+        unanimous = bool(preds.min() == preds.max())
+        label = int(preds[0]) if unanimous else -1
+        unanimous_correct = unanimous and label == trace.theta
+        unanimous_wrong = unanimous and label != trace.theta
+        _, freq = np.unique(preds, return_counts=True)
+        agreement_fraction = float(freq.max()) / float(trace.num_nodes)
+        per_round.append(
+            {
+                "t": t + 1,
+                "unanimous": unanimous,
+                "unanimous_correct": unanimous_correct,
+                "unanimous_wrong": unanimous_wrong,
+                "agreement_fraction": agreement_fraction,
+            }
+        )
+        if unanimous and first_unanimous_t is None:
+            first_unanimous_t = t + 1
+            first_unanimous_correct = unanimous_correct
+
+    return {
+        "per_round": per_round,
+        "first_unanimous_t": first_unanimous_t,
+        "first_unanimous_correct": first_unanimous_correct,
+    }
+
+
 def layout_positions(graph: nx.Graph, *, topology: str, seed: int) -> dict[int, np.ndarray]:
-    """Stable node positions for animation frames."""
-    if topology == "complete":
-        positions = nx.circular_layout(graph)
-    else:
-        positions = nx.spring_layout(graph, seed=seed, k=1.2 / np.sqrt(graph.number_of_nodes()))
-    return {node: np.asarray(coords, dtype=float) for node, coords in positions.items()}
+    """Stable node positions for GIF export (always circular)."""
+    del topology, seed
+    return {
+        node: np.asarray(coords, dtype=float)
+        for node, coords in circular_layout(graph.number_of_nodes()).items()
+    }
 
 
 def rollout_episode(
@@ -137,6 +213,549 @@ def sample_episode(
     )
 
 
+def _episode_viewer_entry(trace: EpisodeTrace, *, episode_seed: int) -> dict[str, Any]:
+    return {
+        "episode_seed": episode_seed,
+        "theta": trace.theta,
+        "correct": trace.correct.astype(bool).tolist(),
+        "consensus": compute_unanimous_consensus(trace),
+    }
+
+
+def _viewer_payload(
+    traces: list[EpisodeTrace],
+    graph: nx.Graph,
+    *,
+    episode_seeds: list[int],
+) -> dict[str, Any]:
+    if len(traces) != len(episode_seeds):
+        raise ValueError("traces and episode_seeds must have the same length.")
+    trace0 = traces[0]
+    positions = circular_layout(trace0.num_nodes)
+    edges, edge_hint, edge_count = viewer_edge_payload(
+        graph,
+        topology=trace0.topology,
+    )
+    return {
+        "num_nodes": trace0.num_nodes,
+        "max_horizon": trace0.max_horizon,
+        "topology": trace0.topology,
+        "signal_quality": trace0.signal_quality,
+        "node_radius": node_radius_for_count(trace0.num_nodes),
+        "positions": [[positions[i][0], positions[i][1]] for i in range(trace0.num_nodes)],
+        "edges": edges,
+        "edge_hint": edge_hint,
+        "edge_count": edge_count,
+        "episodes": [
+            _episode_viewer_entry(trace, episode_seed=seed)
+            for trace, seed in zip(traces, episode_seeds, strict=True)
+        ],
+    }
+
+
+_HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Episode viewer — {title}</title>
+<style>
+  :root {{
+    --green: #22c55e;
+    --red: #ef4444;
+    --edge: #cbd5e1;
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+  }}
+  h1 {{ font-size: 1.1rem; font-weight: 600; margin: 0 0 0.5rem; }}
+  .meta {{ color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }}
+  #graph-wrap {{
+    position: relative;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 1rem;
+    width: min(92vw, 720px);
+    aspect-ratio: 1;
+  }}
+  #edge-canvas {{
+    position: absolute;
+    inset: 1rem;
+    width: calc(100% - 2rem);
+    height: calc(100% - 2rem);
+    pointer-events: none;
+  }}
+  svg {{ position: relative; z-index: 1; width: 100%; height: 100%; display: block; }}
+  .node {{ stroke: none; }}
+  .node.correct {{ fill: var(--green); }}
+  .node.wrong {{ fill: var(--red); }}
+  @keyframes node-flash {{
+    0% {{ opacity: 0.25; }}
+    40% {{ opacity: 1; }}
+    100% {{ opacity: 1; }}
+  }}
+  .node.flash {{ animation: node-flash 0.38s ease-out; }}
+  .controls {{
+    width: min(92vw, 720px);
+    margin-top: 1.25rem;
+  }}
+  .round-row {{
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }}
+  #round-slider {{ flex: 1; accent-color: var(--accent); }}
+  #round-label {{ min-width: 7rem; font-variant-numeric: tabular-nums; }}
+  button {{
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }}
+  button:hover:not(:disabled) {{ border-color: var(--accent); }}
+  button:disabled {{ opacity: 0.4; cursor: not-allowed; }}
+  .nav-btns {{ display: flex; gap: 0.4rem; flex-shrink: 0; }}
+  .episode-row {{
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }}
+  .episode-row label {{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }}
+  #episode-select {{
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.85rem;
+  }}
+  #status {{
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 0.75rem;
+  }}
+  #timeline-wrap {{
+    position: relative;
+    height: 36px;
+    background: #334155;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+  }}
+  .tl-seg {{
+    position: absolute;
+    top: 0; bottom: 0;
+    background: rgba(56, 189, 248, 0.25);
+  }}
+  .tl-marker {{
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    pointer-events: none;
+  }}
+  .tl-consensus {{
+    position: absolute;
+    top: 4px; bottom: 4px;
+    width: 3px;
+    border-radius: 1px;
+    pointer-events: none;
+  }}
+  .tl-consensus.ok {{ background: var(--green); }}
+  .tl-consensus.bad {{ background: var(--red); }}
+  #playhead {{
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: #fff;
+    pointer-events: none;
+    transform: translateX(-50%);
+  }}
+</style>
+</head>
+<body>
+<h1>Social learning episode</h1>
+<p class="meta">{meta}</p>
+<div id="graph-wrap">
+  <canvas id="edge-canvas" aria-hidden="true"></canvas>
+  <svg id="graph" viewBox="-1.15 -1.15 2.3 2.3" xmlns="http://www.w3.org/2000/svg">
+    <g id="nodes"></g>
+  </svg>
+</div>
+<div class="controls">
+  <div class="episode-row">
+    <label>Signal episode
+      <select id="episode-select"></select>
+    </label>
+    <button type="button" id="new-signal-btn" title="Pick another pre-rendered private-signal draw">New signal</button>
+  </div>
+  <div id="status"></div>
+  <div class="round-row">
+    <div class="nav-btns">
+      <button type="button" id="prev-btn" title="Previous round">←</button>
+      <button type="button" id="play-btn">Play</button>
+      <button type="button" id="next-btn" title="Next round">→</button>
+    </div>
+    <input type="range" id="round-slider" min="1" max="{max_horizon}" value="1" step="1"/>
+    <span id="round-label">Round 1 / {max_horizon}</span>
+  </div>
+  <div id="timeline-wrap" title="Click to jump to round"></div>
+</div>
+<script>
+const DATA = {payload_json};
+
+const svg = document.getElementById('graph');
+const edgeCanvas = document.getElementById('edge-canvas');
+const nodesG = document.getElementById('nodes');
+const slider = document.getElementById('round-slider');
+const roundLabel = document.getElementById('round-label');
+const statusEl = document.getElementById('status');
+const timeline = document.getElementById('timeline-wrap');
+const playBtn = document.getElementById('play-btn');
+const prevBtn = document.getElementById('prev-btn');
+const nextBtn = document.getElementById('next-btn');
+const episodeSelect = document.getElementById('episode-select');
+const newSignalBtn = document.getElementById('new-signal-btn');
+const metaEl = document.querySelector('.meta');
+
+const scale = 0.92;
+const r = (DATA.node_radius / 520) * scale;
+const VB_MIN = -1.15;
+const VB_SIZE = 2.3;
+const nodeEls = [];
+
+const nodeFragment = document.createDocumentFragment();
+DATA.positions.forEach((p, i) => {{
+  const cx = p[0] * scale;
+  const cy = p[1] * scale;
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('cx', cx);
+  circle.setAttribute('cy', cy);
+  circle.setAttribute('r', r);
+  circle.classList.add('node');
+  circle.dataset.idx = String(i);
+  nodeFragment.appendChild(circle);
+  nodeEls.push(circle);
+}});
+nodesG.appendChild(nodeFragment);
+
+function edgeLineCoords(u, v) {{
+  const p0 = DATA.positions[u];
+  const p1 = DATA.positions[v];
+  const x0 = p0[0] * scale;
+  const y0 = p0[1] * scale;
+  const x1 = p1[0] * scale;
+  const y1 = p1[1] * scale;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) return [x0, y0, x1, y1];
+  const ux = dx / len;
+  const uy = dy / len;
+  return [x0 + ux * r, y0 + uy * r, x1 - ux * r, y1 - uy * r];
+}}
+
+function toCanvas(x, y, width, height) {{
+  return [
+    ((x - VB_MIN) / VB_SIZE) * width,
+    ((y - VB_MIN) / VB_SIZE) * height,
+  ];
+}}
+
+function drawEdges() {{
+  const rect = edgeCanvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  edgeCanvas.width = Math.round(rect.width * dpr);
+  edgeCanvas.height = Math.round(rect.height * dpr);
+  const ctx = edgeCanvas.getContext('2d');
+  const w = edgeCanvas.width;
+  const h = edgeCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(203, 213, 225, 0.4)';
+  ctx.lineWidth = Math.max(0.5 * dpr, 1);
+  ctx.lineCap = 'round';
+
+  if (DATA.edge_hint === 'complete' || DATA.edge_hint === 'dense') {{
+    const [cx, cy] = toCanvas(0, 0, w, h);
+    const [rx] = toCanvas(scale, 0, w, h);
+    const [cx0] = toCanvas(0, 0, w, h);
+    const ringR = Math.abs(rx - cx0);
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+    return;
+  }}
+
+  ctx.beginPath();
+  for (const [u, v] of DATA.edges) {{
+    const [x1, y1, x2, y2] = edgeLineCoords(u, v);
+    const [cx1, cy1] = toCanvas(x1, y1, w, h);
+    const [cx2, cy2] = toCanvas(x2, y2, w, h);
+    ctx.moveTo(cx1, cy1);
+    ctx.lineTo(cx2, cy2);
+  }}
+  ctx.stroke();
+}}
+
+drawEdges();
+window.addEventListener('resize', drawEdges);
+
+if (!DATA.episodes) {{
+  DATA.episodes = [{{
+    episode_seed: DATA.episode_seed ?? 0,
+    theta: DATA.theta,
+    correct: DATA.correct,
+    consensus: DATA.consensus,
+  }}];
+}}
+
+const playhead = document.createElement('div');
+playhead.id = 'playhead';
+timeline.appendChild(playhead);
+
+const T = DATA.max_horizon;
+let activeEpisodeIdx = 0;
+
+function getEpisode() {{
+  return DATA.episodes[activeEpisodeIdx];
+}}
+
+function updateMetaLine() {{
+  const ep = getEpisode();
+  const base = metaEl.dataset.base || metaEl.textContent;
+  if (!metaEl.dataset.base) metaEl.dataset.base = base;
+  metaEl.textContent = `${{base}} · episode seed=${{ep.episode_seed}} · θ=${{ep.theta}}`;
+}}
+
+function buildTimeline() {{
+  timeline.querySelectorAll('.tl-consensus, .tl-marker').forEach((el) => el.remove());
+  const consensus = getEpisode().consensus;
+  consensus.per_round.forEach((row, idx) => {{
+    if (!row.unanimous) return;
+    const seg = document.createElement('div');
+    seg.className = 'tl-consensus ' + (row.unanimous_correct ? 'ok' : 'bad');
+    const left = ((idx) / T) * 100;
+    const width = (1 / T) * 100;
+    seg.style.left = left + '%';
+    seg.style.width = Math.max(width, 0.4) + '%';
+    timeline.appendChild(seg);
+  }});
+  if (consensus.first_unanimous_t != null) {{
+    const m = document.createElement('div');
+    m.className = 'tl-marker';
+    m.style.left = ((consensus.first_unanimous_t - 0.5) / T) * 100 + '%';
+    timeline.appendChild(m);
+  }}
+}}
+
+function consensusText(tIdx) {{
+  const consensus = getEpisode().consensus;
+  const row = consensus.per_round[tIdx];
+  const first = consensus.first_unanimous_t;
+  const firstOk = consensus.first_unanimous_correct;
+  let line = '';
+  if (row.unanimous) {{
+    line = row.unanimous_correct
+      ? 'Unanimous consensus: <strong>yes (correct)</strong>'
+      : 'Unanimous consensus: <strong>yes (wrong)</strong>';
+  }} else {{
+    line = 'Unanimous consensus: <strong>no</strong>';
+  }}
+  if (first != null) {{
+    const tag = firstOk ? 'correct' : 'wrong';
+    if (tIdx + 1 >= first) {{
+      line += ` &nbsp;|&nbsp; first reached at <strong>t=${{first}}</strong> (${{tag}})`;
+    }} else {{
+      line += ` &nbsp;|&nbsp; first at <strong>t=${{first}}</strong> (${{tag}}) — not yet`;
+    }}
+  }} else {{
+    line += ' &nbsp;|&nbsp; unanimous consensus <strong>never reached</strong>';
+  }}
+  return line;
+}}
+
+let currentRound = null;
+let prevCorrect = null;
+const largeGraph = DATA.num_nodes > {large_graph_threshold};
+
+function flashNode(el) {{
+  el.classList.remove('flash');
+  el.addEventListener('animationend', () => el.classList.remove('flash'), {{ once: true }});
+  requestAnimationFrame(() => el.classList.add('flash'));
+}}
+
+function triggerNodeFlash(correct) {{
+  nodeEls.forEach((el, i) => {{
+    if (largeGraph && prevCorrect !== null && prevCorrect[i] === correct[i]) return;
+    flashNode(el);
+  }});
+}}
+
+function setEpisode(idx) {{
+  if (timer) {{
+    clearInterval(timer);
+    timer = null;
+    playBtn.textContent = 'Play';
+  }}
+  activeEpisodeIdx = idx;
+  episodeSelect.value = String(idx);
+  buildTimeline();
+  currentRound = null;
+  prevCorrect = null;
+  updateMetaLine();
+  renderRound(1);
+}}
+
+function pickNewSignal() {{
+  if (DATA.episodes.length <= 1) return;
+  let next = activeEpisodeIdx;
+  while (next === activeEpisodeIdx) {{
+    next = Math.floor(Math.random() * DATA.episodes.length);
+  }}
+  setEpisode(next);
+}}
+
+function renderRound(tOneBased) {{
+  const ep = getEpisode();
+  const tIdx = tOneBased - 1;
+  const correct = ep.correct[tIdx];
+  const roundChanged = currentRound !== null && currentRound !== tOneBased;
+  currentRound = tOneBased;
+  nodeEls.forEach((el, i) => {{
+    el.classList.toggle('correct', correct[i]);
+    el.classList.toggle('wrong', !correct[i]);
+  }});
+  if (roundChanged) triggerNodeFlash(correct);
+  prevCorrect = correct.slice();
+  const err = 1 - correct.filter(Boolean).length / DATA.num_nodes;
+  const agree = ep.consensus.per_round[tIdx].agreement_fraction;
+  statusEl.innerHTML =
+    `<strong>θ=${{ep.theta}}</strong> &nbsp;|&nbsp; error=${{(err * 100).toFixed(1)}}%` +
+    ` &nbsp;|&nbsp; agreement=${{(agree * 100).toFixed(1)}}%<br/>` +
+    consensusText(tIdx);
+  roundLabel.textContent = `Round ${{tOneBased}} / ${{T}}`;
+  slider.value = String(tOneBased);
+  playhead.style.left = ((tOneBased - 0.5) / T) * 100 + '%';
+  prevBtn.disabled = tOneBased <= 1;
+  nextBtn.disabled = tOneBased >= T;
+}}
+
+slider.addEventListener('input', () => renderRound(Number(slider.value)));
+
+prevBtn.addEventListener('click', () => {{
+  const t = Number(slider.value);
+  if (t > 1) renderRound(t - 1);
+}});
+
+nextBtn.addEventListener('click', () => {{
+  const t = Number(slider.value);
+  if (t < T) renderRound(t + 1);
+}});
+
+timeline.addEventListener('click', (ev) => {{
+  const rect = timeline.getBoundingClientRect();
+  const frac = (ev.clientX - rect.left) / rect.width;
+  const t = Math.min(T, Math.max(1, Math.round(frac * T)));
+  renderRound(t);
+}});
+
+let timer = null;
+playBtn.addEventListener('click', () => {{
+  if (timer) {{
+    clearInterval(timer);
+    timer = null;
+    playBtn.textContent = 'Play';
+    return;
+  }}
+  playBtn.textContent = 'Pause';
+  timer = setInterval(() => {{
+    let t = Number(slider.value) + 1;
+    if (t > T) t = 1;
+    renderRound(t);
+  }}, 500);
+}});
+
+DATA.episodes.forEach((ep, idx) => {{
+  const opt = document.createElement('option');
+  opt.value = String(idx);
+  opt.textContent = `seed ${{ep.episode_seed}} (θ=${{ep.theta}})`;
+  episodeSelect.appendChild(opt);
+}});
+episodeSelect.addEventListener('change', () => setEpisode(Number(episodeSelect.value)));
+newSignalBtn.addEventListener('click', pickNewSignal);
+newSignalBtn.disabled = DATA.episodes.length <= 1;
+episodeSelect.disabled = DATA.episodes.length <= 1;
+
+buildTimeline();
+updateMetaLine();
+renderRound(1);
+</script>
+</body>
+</html>
+"""
+
+
+def save_interactive_episode_view(
+    trace: EpisodeTrace | list[EpisodeTrace],
+    graph: nx.Graph,
+    output_path: str | Path,
+    *,
+    episode_seeds: list[int] | None = None,
+) -> Path:
+    """Write a self-contained interactive HTML viewer with scrubbable timeline."""
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    traces = trace if isinstance(trace, list) else [trace]
+    seeds = episode_seeds if episode_seeds is not None else [0] * len(traces)
+    if len(seeds) != len(traces):
+        raise ValueError("episode_seeds length must match number of traces.")
+    payload = _viewer_payload(traces, graph, episode_seeds=seeds)
+    trace0 = traces[0]
+    meta = (
+        f"n={trace0.num_nodes} · q={trace0.signal_quality:.2f} · "
+        f"{trace0.topology}"
+    )
+    html = _HTML_TEMPLATE.format(
+        title=meta,
+        meta=meta,
+        max_horizon=trace0.max_horizon,
+        large_graph_threshold=LARGE_GRAPH_NODE_THRESHOLD,
+        payload_json=json.dumps(payload),
+    )
+    output.write_text(html, encoding="utf-8")
+    return output
+
+
 def save_episode_animation(
     trace: EpisodeTrace,
     graph: nx.Graph,
@@ -147,17 +766,20 @@ def save_episode_animation(
     dpi: int = 120,
     frame_step: int = 1,
 ) -> Path:
-    """Write a GIF showing node predictions evolving over rounds."""
+    """Write a GIF with circular green/red nodes (optional legacy export)."""
+    del layout_seed
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    positions = layout_positions(graph, topology=trace.topology, seed=layout_seed)
+    positions = {
+        node: np.asarray(coords, dtype=float)
+        for node, coords in circular_layout(trace.num_nodes).items()
+    }
+    node_size = float(np.clip(12000.0 / trace.num_nodes, 80.0, 900.0))
+    consensus = compute_unanimous_consensus(trace)
 
-    pred_colors = {0: "#4C78A8", 1: "#F58518"}
-    signal_colors = {0: "#9ECAE9", 1: "#FDAE6B"}
-
-    fig, ax = plt.subplots(figsize=(8.5, 7.0))
-    fig.subplots_adjust(top=0.86)
+    fig, ax = plt.subplots(figsize=(8.0, 8.0))
+    fig.subplots_adjust(top=0.9)
 
     timesteps = list(range(0, trace.max_horizon, max(1, frame_step)))
     if timesteps[-1] != trace.max_horizon - 1:
@@ -167,73 +789,42 @@ def save_episode_animation(
         ax.clear()
         ax.set_aspect("equal")
         ax.axis("off")
+        ax.set_xlim(-1.15, 1.15)
+        ax.set_ylim(-1.15, 1.15)
 
         nx.draw_networkx_edges(
             graph,
             positions,
             ax=ax,
-            alpha=0.25,
-            width=1.0,
-            edge_color="#BDBDBD",
+            alpha=0.35,
+            width=0.35,
+            edge_color=COLOR_EDGE,
         )
-        for node in range(trace.num_nodes):
-            x, y = positions[node]
-            pred = int(trace.predictions[t, node])
-            signal = int(trace.private_signals[t, node])
-            is_correct = bool(trace.correct[t, node])
-            prob = float(trace.probs_one[t, node])
-
-            nx.draw_networkx_nodes(
-                graph,
-                positions,
-                nodelist=[node],
-                node_color=[pred_colors[pred]],
-                edgecolors="#2CA02C" if is_correct else "#D62728",
-                linewidths=2.8,
-                node_size=1100,
-                ax=ax,
-            )
-            ax.text(
-                x,
-                y,
-                f"{node}\nŷ={pred} ({prob:.2f})\ns={signal}",
-                ha="center",
-                va="center",
-                fontsize=8,
-                color="white",
-                fontweight="bold",
-            )
-            comm = int(trace.comm_messages[t, node])
-            ax.scatter(
-                [x + 0.11],
-                [y + 0.11],
-                s=180,
-                c=signal_colors[comm],
-                edgecolors="black",
-                linewidths=0.6,
-                zorder=5,
-                marker="s",
-            )
-
-        err = 1.0 - trace.correct[t].mean()
-        agree = trace.agreement_fractions[t]
-        unanimous = trace.predictions[t].min() == trace.predictions[t].max()
-        title = (
-            f"Round {t + 1}/{trace.max_horizon}  |  "
-            f"θ={trace.theta}  |  q={trace.signal_quality:.2f}  |  "
-            f"error={err:.0%}  |  agreement={agree:.0%}"
-        )
-        if unanimous:
-            title += "  |  unanimous"
-        ax.set_title(title, fontsize=11, pad=8)
-        legend_handles = [
-            Patch(facecolor=pred_colors[0], edgecolor="black", label="prediction ŷ=0"),
-            Patch(facecolor=pred_colors[1], edgecolor="black", label="prediction ŷ=1"),
-            Patch(facecolor="white", edgecolor="#2CA02C", linewidth=2, label="correct vs θ"),
-            Patch(facecolor="white", edgecolor="#D62728", linewidth=2, label="wrong vs θ"),
-            Patch(facecolor=signal_colors[0], edgecolor="black", label="comm. bit (square)"),
+        colors = [
+            COLOR_CORRECT if trace.correct[t, node] else COLOR_WRONG
+            for node in range(trace.num_nodes)
         ]
-        ax.legend(handles=legend_handles, loc="upper left", bbox_to_anchor=(0.0, -0.02), fontsize=8)
+        nx.draw_networkx_nodes(
+            graph,
+            positions,
+            ax=ax,
+            node_color=colors,
+            node_size=node_size,
+            linewidths=0,
+        )
+
+        row = consensus["per_round"][t]
+        err = 1.0 - trace.correct[t].mean()
+        title = (
+            f"Round {t + 1}/{trace.max_horizon}  |  θ={trace.theta}  |  "
+            f"error={err:.0%}"
+        )
+        if row["unanimous"]:
+            tag = "correct" if row["unanimous_correct"] else "wrong"
+            title += f"  |  unanimous ({tag})"
+        elif consensus["first_unanimous_t"] is not None and t + 1 < consensus["first_unanimous_t"]:
+            title += f"  |  unanimous at t={consensus['first_unanimous_t']}"
+        ax.set_title(title, fontsize=11, pad=8)
 
     def _update(frame_idx: int) -> None:
         _draw_frame(timesteps[frame_idx])
@@ -279,11 +870,17 @@ def load_checkpoint(
 
 __all__ = [
     "EpisodeTrace",
+    "MAX_VIEWER_EDGES",
+    "circular_layout",
+    "compute_unanimous_consensus",
     "layout_positions",
     "load_checkpoint",
+    "node_radius_for_count",
     "pyg_to_networkx",
     "rollout_episode",
     "sample_episode",
     "save_checkpoint",
     "save_episode_animation",
+    "save_interactive_episode_view",
+    "viewer_edge_payload",
 ]

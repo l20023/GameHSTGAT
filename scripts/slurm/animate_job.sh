@@ -64,7 +64,7 @@ PY
 )"
 
 CKPT="artifacts/checkpoints/${CHANNEL}/n_${NUM_NODES}/q_${Q_KEY}/${TOPO}/seed_${SEED}.pt"
-OUT="artifacts/animations/${CHANNEL}/n_${NUM_NODES}/q_${Q_KEY}/${TOPO}/seed_${SEED}.gif"
+OUT="artifacts/animations/${CHANNEL}/n_${NUM_NODES}/q_${Q_KEY}/${TOPO}/seed_${SEED}.html"
 
 cmd=(
   python scripts/animate_episode.py
@@ -76,7 +76,7 @@ cmd=(
   --train-episodes "$TRAIN_EPISODES"
   --episode-seed $((EPISODE_SEED_BASE + SEED))
   --frame-step "$FRAME_STEP"
-  --fps 2
+  --format html
   --save-checkpoint "$CKPT"
   --output "$OUT"
 )

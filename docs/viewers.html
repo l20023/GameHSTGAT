@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Episode viewer launcher — GameHSTGAT</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 1.25rem 1.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 0.35rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin: 0; }
+    .sub a { color: var(--accent); }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-end;
+      padding: 1rem 1.5rem;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.9rem;
+      min-width: 9rem;
+    }
+    .open-link {
+      color: var(--accent);
+      font-size: 0.85rem;
+      text-decoration: none;
+      padding-bottom: 0.45rem;
+    }
+    .open-link:hover { text-decoration: underline; }
+    #viewer-frame {
+      flex: 1;
+      width: 100%;
+      min-height: 70vh;
+      border: 0;
+      background: #0f172a;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Interactive episode viewers</h1>
+    <p class="sub">
+      q=0.55 · training seed 0 ·
+      <a href="https://github.com/l20023/GameHSTGAT#interactive-viewers-on-github">README</a>
+    </p>
+  </header>
+  <div class="toolbar">
+    <label>Model
+      <select id="mode">
+        <option value="fair_1bit">fair_1bit</option>
+        <option value="vector">vector</option>
+      </select>
+    </label>
+    <label>Size n
+      <select id="size">
+        <option value="10">10</option>
+        <option value="100">100</option>
+        <option value="1000">1000</option>
+      </select>
+    </label>
+    <label>Topology
+      <select id="topo">
+        <option value="complete">complete</option>
+        <option value="ws_p_0.0">ws_p_0.0</option>
+        <option value="ws_p_0.1">ws_p_0.1</option>
+      </select>
+    </label>
+    <a class="open-link" id="open-full" href="#" target="_blank" rel="noopener">Open fullscreen ↗</a>
+  </div>
+  <iframe id="viewer-frame" title="Episode viewer"></iframe>
+  <script>
+    const PAGES_BASE = "https://l20023.github.io/GameHSTGAT";
+    const modeEl = document.getElementById("mode");
+    const sizeEl = document.getElementById("size");
+    const topoEl = document.getElementById("topo");
+    const frame = document.getElementById("viewer-frame");
+    const openFull = document.getElementById("open-full");
+
+    function viewerRelPath() {
+      const mode = modeEl.value;
+      const n = sizeEl.value;
+      const topo = topoEl.value;
+      return `../artifacts/animations/${mode}/n_${n}/q_0p55/${topo}/seed_0.html`;
+    }
+
+    function viewerAbsUrl() {
+      return `${PAGES_BASE}/artifacts/animations/${modeEl.value}/n_${sizeEl.value}/q_0p55/${topoEl.value}/seed_0.html`;
+    }
+
+    function loadViewer() {
+      const rel = viewerRelPath();
+      frame.src = rel;
+      openFull.href = viewerAbsUrl();
+      const hash = `${modeEl.value}|n${sizeEl.value}|${topoEl.value}`;
+      history.replaceState(null, "", `#${hash}`);
+    }
+
+    function applyHash() {
+      const raw = location.hash.replace(/^#/, "");
+      if (!raw) return;
+      const [mode, nPart, topo] = raw.split("|");
+      if (mode && (mode === "fair_1bit" || mode === "vector")) modeEl.value = mode;
+      if (nPart && nPart.startsWith("n")) sizeEl.value = nPart.slice(1);
+      if (topo) topoEl.value = topo;
+    }
+
+    [modeEl, sizeEl, topoEl].forEach((el) => el.addEventListener("change", loadViewer));
+    applyHash();
+    loadViewer();
+  </script>
+</body>
+</html>

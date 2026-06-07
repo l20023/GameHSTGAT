@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Episode viewer — n=10 · q=0.55 · complete · θ=0</title>
+<style>
+  :root {
+    --green: #22c55e;
+    --red: #ef4444;
+    --edge: #cbd5e1;
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+  }
+  h1 { font-size: 1.1rem; font-weight: 600; margin: 0 0 0.5rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }
+  #graph-wrap {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 1rem;
+    width: min(92vw, 720px);
+    aspect-ratio: 1;
+  }
+  svg { width: 100%; height: 100%; display: block; }
+  .edge {
+    stroke: var(--edge);
+    stroke-width: 0.5px;
+    opacity: 0.4;
+    vector-effect: non-scaling-stroke;
+    stroke-linecap: round;
+  }
+  .node { stroke: none; }
+  .node.correct { fill: var(--green); }
+  .node.wrong { fill: var(--red); }
+  @keyframes node-flash {
+    0% { filter: brightness(2.4); opacity: 0.5; }
+    45% { filter: brightness(1.6); opacity: 1; }
+    100% { filter: brightness(1); opacity: 1; }
+  }
+  .node.flash { animation: node-flash 0.38s ease-out; }
+  .controls {
+    width: min(92vw, 720px);
+    margin-top: 1.25rem;
+  }
+  .round-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  #round-slider { flex: 1; accent-color: var(--accent); }
+  #round-label { min-width: 7rem; font-variant-numeric: tabular-nums; }
+  button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  button:hover { border-color: var(--accent); }
+  #status {
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 0.75rem;
+  }
+  #timeline-wrap {
+    position: relative;
+    height: 36px;
+    background: #334155;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .tl-seg {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: rgba(56, 189, 248, 0.25);
+  }
+  .tl-marker {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    pointer-events: none;
+  }
+  .tl-consensus {
+    position: absolute;
+    top: 4px; bottom: 4px;
+    width: 3px;
+    border-radius: 1px;
+    pointer-events: none;
+  }
+  .tl-consensus.ok { background: var(--green); }
+  .tl-consensus.bad { background: var(--red); }
+  #playhead {
+    position: absolute;
+    top: -2px; bottom: -2px;
+    width: 3px;
+    background: #fff;
+    box-shadow: 0 0 6px rgba(255,255,255,0.8);
+    pointer-events: none;
+    transform: translateX(-50%);
+  }
+</style>
+</head>
+<body>
+<h1>Social learning episode</h1>
+<p class="meta">n=10 · q=0.55 · complete · θ=0</p>
+<div id="graph-wrap">
+  <svg id="graph" viewBox="-1.15 -1.15 2.3 2.3" xmlns="http://www.w3.org/2000/svg">
+    <g id="edges"></g>
+    <g id="nodes"></g>
+  </svg>
+</div>
+<div class="controls">
+  <div id="status"></div>
+  <div class="round-row">
+    <button type="button" id="play-btn">Play</button>
+    <input type="range" id="round-slider" min="1" max="50" value="1" step="1"/>
+    <span id="round-label">Round 1 / 50</span>
+  </div>
+  <div id="timeline-wrap" title="Click to jump to round"></div>
+</div>
+<script>
+const DATA = {"theta": 0, "num_nodes": 10, "max_horizon": 50, "topology": "complete", "signal_quality": 0.55, "node_radius": 14.0, "positions": [[6.123233995736766e-17, -1.0], [0.5877852522924731, -0.8090169943749475], [0.9510565162951535, -0.3090169943749474], [0.9510565162951535, 0.3090169943749474], [0.5877852522924731, 0.8090169943749475], [6.123233995736766e-17, 1.0], [-0.587785252292473, 0.8090169943749475], [-0.9510565162951535, 0.3090169943749475], [-0.9510565162951536, -0.3090169943749473], [-0.5877852522924732, -0.8090169943749473]], "edges": [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7], [0, 8], [0, 9], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7], [1, 8], [1, 9], [2, 3], [2, 4], [2, 5], [2, 6], [2, 7], [2, 8], [2, 9], [3, 4], [3, 5], [3, 6], [3, 7], [3, 8], [3, 9], [4, 5], [4, 6], [4, 7], [4, 8], [4, 9], [5, 6], [5, 7], [5, 8], [5, 9], [6, 7], [6, 8], [6, 9], [7, 8], [7, 9], [8, 9]], "correct": [[false, false, false, false, false, true, true, true, true, true], [true, true, false, false, false, true, true, true, true, false], [true, false, false, true, true, true, true, true, true, true], [true, false, true, false, true, true, true, true, true, true], [true, false, true, false, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true], [true, true, true, true, true, true, true, true, true, true]], "consensus": {"per_round": [{"t": 1, "unanimous": false, "unanimous_correct": false, "unanimous_wrong": false, "agreement_fraction": 0.5}, {"t": 2, "unanimous": false, "unanimous_correct": false, "unanimous_wrong": false, "agreement_fraction": 0.6}, {"t": 3, "unanimous": false, "unanimous_correct": false, "unanimous_wrong": false, "agreement_fraction": 0.8}, {"t": 4, "unanimous": false, "unanimous_correct": false, "unanimous_wrong": false, "agreement_fraction": 0.8}, {"t": 5, "unanimous": false, "unanimous_correct": false, "unanimous_wrong": false, "agreement_fraction": 0.8}, {"t": 6, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 7, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 8, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 9, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 10, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 11, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 12, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 13, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 14, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 15, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 16, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 17, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 18, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 19, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 20, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 21, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 22, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 23, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 24, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 25, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 26, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 27, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 28, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 29, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 30, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 31, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 32, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 33, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 34, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 35, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 36, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 37, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 38, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 39, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 40, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 41, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 42, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 43, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 44, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 45, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 46, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 47, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 48, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 49, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}, {"t": 50, "unanimous": true, "unanimous_correct": true, "unanimous_wrong": false, "agreement_fraction": 1.0}], "first_unanimous_t": 6, "first_unanimous_correct": true}};
+
+const svg = document.getElementById('graph');
+const edgesG = document.getElementById('edges');
+const nodesG = document.getElementById('nodes');
+const slider = document.getElementById('round-slider');
+const roundLabel = document.getElementById('round-label');
+const statusEl = document.getElementById('status');
+const timeline = document.getElementById('timeline-wrap');
+const playBtn = document.getElementById('play-btn');
+
+const scale = 0.92;
+const r = (DATA.node_radius / 520) * scale;
+
+DATA.positions.forEach((p, i) => {
+  const cx = p[0] * scale;
+  const cy = p[1] * scale;
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('cx', cx);
+  circle.setAttribute('cy', cy);
+  circle.setAttribute('r', r);
+  circle.classList.add('node');
+  circle.dataset.idx = String(i);
+  nodesG.appendChild(circle);
+});
+
+function edgeLineCoords(u, v) {
+  const p0 = DATA.positions[u];
+  const p1 = DATA.positions[v];
+  const x0 = p0[0] * scale;
+  const y0 = p0[1] * scale;
+  const x1 = p1[0] * scale;
+  const y1 = p1[1] * scale;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) return [x0, y0, x1, y1];
+  const ux = dx / len;
+  const uy = dy / len;
+  return [x0 + ux * r, y0 + uy * r, x1 - ux * r, y1 - uy * r];
+}
+
+DATA.edges.forEach(([u, v]) => {
+  const [x1, y1, x2, y2] = edgeLineCoords(u, v);
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', x1);
+  line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2);
+  line.setAttribute('y2', y2);
+  line.setAttribute('vector-effect', 'non-scaling-stroke');
+  line.classList.add('edge');
+  edgesG.appendChild(line);
+});
+
+const playhead = document.createElement('div');
+playhead.id = 'playhead';
+timeline.appendChild(playhead);
+
+const T = DATA.max_horizon;
+DATA.consensus.per_round.forEach((row, idx) => {
+  if (!row.unanimous) return;
+  const seg = document.createElement('div');
+  seg.className = 'tl-consensus ' + (row.unanimous_correct ? 'ok' : 'bad');
+  const left = ((idx) / T) * 100;
+  const width = (1 / T) * 100;
+  seg.style.left = left + '%';
+  seg.style.width = Math.max(width, 0.4) + '%';
+  timeline.appendChild(seg);
+});
+
+if (DATA.consensus.first_unanimous_t != null) {
+  const m = document.createElement('div');
+  m.className = 'tl-marker';
+  m.style.left = ((DATA.consensus.first_unanimous_t - 0.5) / T) * 100 + '%';
+  timeline.appendChild(m);
+}
+
+function consensusText(tIdx) {
+  const row = DATA.consensus.per_round[tIdx];
+  const first = DATA.consensus.first_unanimous_t;
+  const firstOk = DATA.consensus.first_unanimous_correct;
+  let line = '';
+  if (row.unanimous) {
+    line = row.unanimous_correct
+      ? 'Unanimous consensus: <strong>yes (correct)</strong>'
+      : 'Unanimous consensus: <strong>yes (wrong)</strong>';
+  } else {
+    line = 'Unanimous consensus: <strong>no</strong>';
+  }
+  if (first != null) {
+    const tag = firstOk ? 'correct' : 'wrong';
+    if (tIdx + 1 >= first) {
+      line += ` &nbsp;|&nbsp; first reached at <strong>t=${first}</strong> (${tag})`;
+    } else {
+      line += ` &nbsp;|&nbsp; first at <strong>t=${first}</strong> (${tag}) — not yet`;
+    }
+  } else {
+    line += ' &nbsp;|&nbsp; unanimous consensus <strong>never reached</strong>';
+  }
+  return line;
+}
+
+let currentRound = null;
+
+function triggerNodeFlash() {
+  nodesG.querySelectorAll('.node').forEach((el) => {
+    el.classList.remove('flash');
+    el.addEventListener('animationend', () => el.classList.remove('flash'), { once: true });
+    requestAnimationFrame(() => el.classList.add('flash'));
+  });
+}
+
+function renderRound(tOneBased) {
+  const tIdx = tOneBased - 1;
+  const correct = DATA.correct[tIdx];
+  const roundChanged = currentRound !== null && currentRound !== tOneBased;
+  currentRound = tOneBased;
+  nodesG.querySelectorAll('.node').forEach((el, i) => {
+    el.classList.toggle('correct', correct[i]);
+    el.classList.toggle('wrong', !correct[i]);
+  });
+  if (roundChanged) triggerNodeFlash();
+  const err = 1 - correct.filter(Boolean).length / DATA.num_nodes;
+  const agree = DATA.consensus.per_round[tIdx].agreement_fraction;
+  statusEl.innerHTML =
+    `<strong>θ=${DATA.theta}</strong> &nbsp;|&nbsp; error=${(err * 100).toFixed(1)}%` +
+    ` &nbsp;|&nbsp; agreement=${(agree * 100).toFixed(1)}%<br/>` +
+    consensusText(tIdx);
+  roundLabel.textContent = `Round ${tOneBased} / ${T}`;
+  slider.value = String(tOneBased);
+  playhead.style.left = ((tOneBased - 0.5) / T) * 100 + '%';
+}
+
+slider.addEventListener('input', () => renderRound(Number(slider.value)));
+
+timeline.addEventListener('click', (ev) => {
+  const rect = timeline.getBoundingClientRect();
+  const frac = (ev.clientX - rect.left) / rect.width;
+  const t = Math.min(T, Math.max(1, Math.round(frac * T)));
+  renderRound(t);
+});
+
+let timer = null;
+playBtn.addEventListener('click', () => {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+    playBtn.textContent = 'Play';
+    return;
+  }
+  playBtn.textContent = 'Pause';
+  timer = setInterval(() => {
+    let t = Number(slider.value) + 1;
+    if (t > T) t = 1;
+    renderRound(t);
+  }, 500);
+});
+
+renderRound(1);
+</script>
+</body>
+</html>
