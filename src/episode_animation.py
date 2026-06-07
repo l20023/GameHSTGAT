@@ -416,19 +416,38 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
+    padding: 1.25rem 1.5rem 1.5rem;
+  }}
+  .page-header {{
+    max-width: 1280px;
+    margin: 0 auto 1rem;
+  }}
+  h1 {{ font-size: 1.1rem; font-weight: 600; margin: 0 0 0.35rem; }}
+  .meta {{ color: var(--muted); font-size: 0.85rem; margin: 0; }}
+  .viewer-layout {{
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+    max-width: 1280px;
+    margin: 0 auto;
+  }}
+  .viewer-graph {{
+    flex: 1 1 0;
+    min-width: 0;
+  }}
+  .viewer-sidebar {{
+    flex: 0 0 min(380px, 34vw);
+    min-width: 280px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    padding: 1.5rem;
+    gap: 1rem;
   }}
-  h1 {{ font-size: 1.1rem; font-weight: 600; margin: 0 0 0.5rem; }}
-  .meta {{ color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }}
   #graph-wrap {{
     position: relative;
     background: var(--panel);
     border-radius: 12px;
     padding: 1rem;
-    width: min(92vw, 720px);
+    width: 100%;
     aspect-ratio: 1;
   }}
   .graph-stage {{
@@ -459,15 +478,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .private-signal.wrong {{ fill: var(--red); opacity: 1; }}
   #private-signals.hidden {{ visibility: hidden; }}
   .graph-legend {{
-    width: min(92vw, 720px);
+    width: 100%;
     margin-top: 0.55rem;
     color: var(--muted);
     font-size: 0.78rem;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem 1.25rem;
+    gap: 0.5rem 1rem;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
   }}
   .legend-item {{ display: inline-flex; align-items: center; gap: 0.35rem; }}
   .legend-swatch {{
@@ -488,13 +507,16 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   .node.flash {{ animation: node-flash 0.38s ease-out; }}
   .controls {{
-    width: min(92vw, 720px);
-    margin-top: 1.25rem;
+    width: 100%;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 1rem;
   }}
   .round-row {{
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 1rem;
+    gap: 0.65rem 0.75rem;
     margin-bottom: 0.75rem;
   }}
   .private-row {{
@@ -507,8 +529,18 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 0.85rem;
     color: var(--muted);
   }}
-  #round-slider {{ flex: 1; accent-color: var(--accent); }}
-  #round-label {{ min-width: 7rem; font-variant-numeric: tabular-nums; }}
+  #round-slider {{
+    flex: 1 1 8rem;
+    min-width: 0;
+    width: 100%;
+    accent-color: var(--accent);
+  }}
+  #round-label {{
+    flex: 0 0 100%;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }}
   button {{
     background: var(--panel);
     color: var(--text);
@@ -523,31 +555,33 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .nav-btns {{ display: flex; gap: 0.4rem; flex-shrink: 0; }}
   .episode-row {{
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
     margin-bottom: 0.75rem;
   }}
   .episode-row label {{
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
     font-size: 0.85rem;
     color: var(--muted);
   }}
   #episode-select {{
-    background: var(--panel);
+    background: var(--bg);
     color: var(--text);
     border: 1px solid #334155;
     border-radius: 6px;
     padding: 0.35rem 0.5rem;
     font-size: 0.85rem;
+    width: 100%;
   }}
   #status {{
-    background: var(--panel);
+    background: var(--bg);
     border-radius: 8px;
     padding: 0.75rem 1rem;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     line-height: 1.5;
     margin-bottom: 0.75rem;
   }}
@@ -589,11 +623,24 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     transform: translateX(-50%);
   }}
   .eval-panel {{
-    width: min(92vw, 960px);
-    margin-top: 1.5rem;
+    width: 100%;
+    margin: 0;
     background: var(--panel);
     border-radius: 12px;
     padding: 0.75rem 1rem 1rem;
+  }}
+  @media (max-width: 900px) {{
+    .viewer-layout {{
+      flex-direction: column;
+    }}
+    .viewer-sidebar {{
+      flex: 1 1 auto;
+      width: 100%;
+      min-width: 0;
+    }}
+    #round-label {{
+      flex: 0 0 auto;
+    }}
   }}
   .eval-panel summary {{
     cursor: pointer;
@@ -616,47 +663,55 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>Social learning episode</h1>
-<p class="meta">{meta}</p>
-<div id="graph-wrap">
-  <div class="graph-stage">
-    <canvas id="edge-canvas" aria-hidden="true"></canvas>
-    <svg id="graph" viewBox="-{svg_margin} -{svg_margin} {svg_size} {svg_size}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-      <g id="private-signals" class="hidden"></g>
-      <g id="nodes"></g>
-    </svg>
-  </div>
-  <p class="graph-legend">
-    <span class="legend-item"><span class="legend-swatch pred-correct"></span> inner: prediction correct</span>
-    <span class="legend-item"><span class="legend-swatch pred-wrong"></span> inner: prediction wrong</span>
-    <span class="legend-item"><span class="legend-swatch priv-correct"></span> outer: private signal correct</span>
-    <span class="legend-item"><span class="legend-swatch priv-wrong"></span> outer: private signal wrong</span>
-  </p>
-</div>
-<div class="controls">
-  <div class="episode-row">
-    <label>Signal episode
-      <select id="episode-select"></select>
-    </label>
-    <button type="button" id="new-signal-btn" title="Pick another pre-rendered private-signal draw">New signal</button>
-  </div>
-  <div id="status"></div>
-  <div class="round-row">
-    <div class="nav-btns">
-      <button type="button" id="prev-btn" title="Previous round">←</button>
-      <button type="button" id="play-btn">Play</button>
-      <button type="button" id="next-btn" title="Next round">→</button>
+<header class="page-header">
+  <h1>Social learning episode</h1>
+  <p class="meta">{meta}</p>
+</header>
+<main class="viewer-layout">
+  <section class="viewer-graph" aria-label="Episode graph">
+    <div id="graph-wrap">
+      <div class="graph-stage">
+        <canvas id="edge-canvas" aria-hidden="true"></canvas>
+        <svg id="graph" viewBox="-{svg_margin} -{svg_margin} {svg_size} {svg_size}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+          <g id="private-signals" class="hidden"></g>
+          <g id="nodes"></g>
+        </svg>
+      </div>
     </div>
-    <input type="range" id="round-slider" min="1" max="{max_horizon}" value="1" step="1"/>
-    <span id="round-label">Round 1 / {max_horizon}</span>
-  </div>
-  <div class="private-row">
-    <label><input type="checkbox" id="show-private-cb"/> Show private signals (outer ring, same round)</label>
-  </div>
-  <div id="timeline-wrap" title="Click to jump to round"></div>
-</div>
-{eval_plot_section}
-{summary_plot_section}
+    <p class="graph-legend">
+      <span class="legend-item"><span class="legend-swatch pred-correct"></span> inner: prediction correct</span>
+      <span class="legend-item"><span class="legend-swatch pred-wrong"></span> inner: prediction wrong</span>
+      <span class="legend-item"><span class="legend-swatch priv-correct"></span> outer: private signal correct</span>
+      <span class="legend-item"><span class="legend-swatch priv-wrong"></span> outer: private signal wrong</span>
+    </p>
+  </section>
+  <aside class="viewer-sidebar" aria-label="Controls and plots">
+    <div class="controls">
+      <div class="episode-row">
+        <label>Signal episode
+          <select id="episode-select"></select>
+        </label>
+        <button type="button" id="new-signal-btn" title="Pick another pre-rendered private-signal draw">New signal</button>
+      </div>
+      <div id="status"></div>
+      <div class="round-row">
+        <div class="nav-btns">
+          <button type="button" id="prev-btn" title="Previous round">←</button>
+          <button type="button" id="play-btn">Play</button>
+          <button type="button" id="next-btn" title="Next round">→</button>
+        </div>
+        <input type="range" id="round-slider" min="1" max="{max_horizon}" value="1" step="1"/>
+        <span id="round-label">Round 1 / {max_horizon}</span>
+      </div>
+      <div class="private-row">
+        <label><input type="checkbox" id="show-private-cb"/> Show private signals (outer ring, same round)</label>
+      </div>
+      <div id="timeline-wrap" title="Click to jump to round"></div>
+    </div>
+    {eval_plot_section}
+    {summary_plot_section}
+  </aside>
+</main>
 <script>
 const DATA = {payload_json};
 
