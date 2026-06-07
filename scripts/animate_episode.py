@@ -16,12 +16,16 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.episode_animation import (
     compute_unanimous_consensus,
     load_checkpoint,
+    load_rollouts_cache,
     pyg_to_networkx,
     rollout_episode,
+    rollouts_cache_is_valid,
+    rollouts_cache_path,
     sample_episode,
     save_checkpoint,
     save_episode_animation,
     save_interactive_episode_view,
+    save_rollouts_cache,
 )
 from src.graph_generator import GraphGenerator
 from src.grid_tasks import resolve_max_horizon
@@ -65,6 +69,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fps", type=int, default=2)
     parser.add_argument("--frame-step", type=int, default=1, help="Use every k-th round (e.g. 2 for T=100).")
     parser.add_argument("--skip-train", action="store_true", help="Require --checkpoint.")
+    parser.add_argument(
+        "--force-reroll",
+        action="store_true",
+        help="Re-run model rollouts even when a valid .rollouts.npz cache exists.",
+    )
     return parser.parse_args()
 
 
@@ -126,70 +135,6 @@ def main() -> None:
         "train_episodes": args.train_episodes,
     }
 
-    if args.checkpoint is not None:
-        model, metadata = load_checkpoint(args.checkpoint, device=device)
-        print(f"Loaded checkpoint: {args.checkpoint}")
-    else:
-        if args.skip_train:
-            raise ValueError("--skip-train requires --checkpoint.")
-        print(
-            f"Training RGAT ({args.communication_mode}) on "
-            f"n={args.num_nodes}, q={args.signal_quality}, {args.topology}, "
-            f"T={max_horizon}, episodes={args.train_episodes} ..."
-        )
-        train_outcome = train_condition_model(
-            graph_data=graph_data,
-            train_episodes=args.train_episodes,
-            max_horizon=max_horizon,
-            signal_quality=args.signal_quality,
-            hidden_dim=args.hidden_dim,
-            num_heads=args.num_heads,
-            communication_mode=args.communication_mode,
-            communication_dim=args.communication_dim,
-            learning_rate=args.learning_rate,
-            seed=args.seed,
-            device=device,
-            dropout=args.dropout,
-            weight_decay=args.weight_decay,
-        )
-        model = train_outcome.model
-        model.eval()
-        print(
-            f"Training done. best_validation_error="
-            f"{train_outcome.best_validation_error}"
-        )
-        q_key = f"{args.signal_quality:.2f}".replace(".", "p")
-        checkpoint_path = args.save_checkpoint or Path(
-            f"artifacts/checkpoints/{args.communication_mode}/n_{args.num_nodes}"
-            f"/q_{q_key}/{args.topology}/seed_{args.seed}.pt"
-        )
-        save_checkpoint(model, checkpoint_path, metadata)
-        print(f"Saved checkpoint: {checkpoint_path}")
-
-    episode_seeds = [args.episode_seed + offset for offset in range(max(args.episode_variants, 1))]
-    traces = []
-    for episode_seed in episode_seeds:
-        episode = sample_episode(
-            num_nodes=args.num_nodes,
-            max_horizon=max_horizon,
-            signal_quality=args.signal_quality,
-            seed=episode_seed,
-        )
-        traces.append(
-            rollout_episode(
-                model=model,
-                graph_data=graph_data,
-                episode=episode,
-                device=device,
-                signal_quality=args.signal_quality,
-                topology=topology_label,
-            )
-        )
-    trace = traces[0]
-    nx_graph = pyg_to_networkx(graph_data.cpu())
-    consensus = compute_unanimous_consensus(trace)
-
-    outputs: list[Path] = []
     primary = args.output
     if primary is None:
         primary = default_output_path(
@@ -200,6 +145,98 @@ def main() -> None:
             seed=args.seed,
             fmt="html" if args.format in {"html", "both"} else "gif",
         )
+
+    episode_seeds = [args.episode_seed + offset for offset in range(max(args.episode_variants, 1))]
+    cache_path = rollouts_cache_path(primary)
+    checkpoint_path = args.checkpoint
+    use_cache = (
+        not args.force_reroll
+        and rollouts_cache_is_valid(
+            cache_path,
+            episode_seeds=episode_seeds,
+            num_nodes=args.num_nodes,
+            max_horizon=max_horizon,
+            signal_quality=args.signal_quality,
+            topology=topology_label,
+            checkpoint_path=checkpoint_path,
+        )
+    )
+
+    if use_cache:
+        traces, episode_seeds = load_rollouts_cache(cache_path)
+        print(f"Loaded rollouts cache: {cache_path}")
+    else:
+        if args.checkpoint is not None:
+            model, metadata = load_checkpoint(args.checkpoint, device=device)
+            print(f"Loaded checkpoint: {args.checkpoint}")
+        else:
+            if args.skip_train:
+                raise ValueError("--skip-train requires --checkpoint.")
+            print(
+                f"Training RGAT ({args.communication_mode}) on "
+                f"n={args.num_nodes}, q={args.signal_quality}, {args.topology}, "
+                f"T={max_horizon}, episodes={args.train_episodes} ..."
+            )
+            train_outcome = train_condition_model(
+                graph_data=graph_data,
+                train_episodes=args.train_episodes,
+                max_horizon=max_horizon,
+                signal_quality=args.signal_quality,
+                hidden_dim=args.hidden_dim,
+                num_heads=args.num_heads,
+                communication_mode=args.communication_mode,
+                communication_dim=args.communication_dim,
+                learning_rate=args.learning_rate,
+                seed=args.seed,
+                device=device,
+                dropout=args.dropout,
+                weight_decay=args.weight_decay,
+            )
+            model = train_outcome.model
+            model.eval()
+            print(
+                f"Training done. best_validation_error="
+                f"{train_outcome.best_validation_error}"
+            )
+            q_key = f"{args.signal_quality:.2f}".replace(".", "p")
+            checkpoint_path = args.save_checkpoint or Path(
+                f"artifacts/checkpoints/{args.communication_mode}/n_{args.num_nodes}"
+                f"/q_{q_key}/{args.topology}/seed_{args.seed}.pt"
+            )
+            save_checkpoint(model, checkpoint_path, metadata)
+            print(f"Saved checkpoint: {checkpoint_path}")
+
+        traces = []
+        for episode_seed in episode_seeds:
+            episode = sample_episode(
+                num_nodes=args.num_nodes,
+                max_horizon=max_horizon,
+                signal_quality=args.signal_quality,
+                seed=episode_seed,
+            )
+            traces.append(
+                rollout_episode(
+                    model=model,
+                    graph_data=graph_data,
+                    episode=episode,
+                    device=device,
+                    signal_quality=args.signal_quality,
+                    topology=topology_label,
+                )
+            )
+        save_rollouts_cache(
+            cache_path,
+            traces,
+            episode_seeds=episode_seeds,
+            checkpoint_path=checkpoint_path,
+        )
+        print(f"Saved rollouts cache: {cache_path}")
+
+    trace = traces[0]
+    nx_graph = pyg_to_networkx(graph_data.cpu())
+    consensus = compute_unanimous_consensus(trace)
+
+    outputs: list[Path] = []
 
     if args.format in {"html", "both"}:
         html_path = primary if primary.suffix == ".html" else primary.with_suffix(".html")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -213,13 +214,116 @@ def sample_episode(
     )
 
 
+def pack_correct_bitmap(correct: np.ndarray) -> str:
+    """Pack (T, N) booleans into a compact base64 bitmap for the HTML viewer."""
+    flat = correct.astype(np.uint8).flatten()
+    return base64.b64encode(np.packbits(flat).tobytes()).decode("ascii")
+
+
 def _episode_viewer_entry(trace: EpisodeTrace, *, episode_seed: int) -> dict[str, Any]:
     return {
         "episode_seed": episode_seed,
         "theta": trace.theta,
-        "correct": trace.correct.astype(bool).tolist(),
+        "correct_shape": [trace.max_horizon, trace.num_nodes],
+        "correct_packed": pack_correct_bitmap(trace.correct),
         "consensus": compute_unanimous_consensus(trace),
     }
+
+
+def rollouts_cache_path(output_path: str | Path) -> Path:
+    """Sidecar cache path for precomputed episode rollouts."""
+    return Path(output_path).with_suffix(".rollouts.npz")
+
+
+def save_rollouts_cache(
+    path: str | Path,
+    traces: list[EpisodeTrace],
+    *,
+    episode_seeds: list[int],
+    checkpoint_path: str | Path | None = None,
+) -> Path:
+    """Persist rollout results so HTML can be rebuilt without re-running the model."""
+    cache = Path(path)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    trace0 = traces[0]
+    checkpoint_mtime = (
+        float(Path(checkpoint_path).stat().st_mtime) if checkpoint_path is not None else -1.0
+    )
+    np.savez_compressed(
+        cache,
+        episode_seeds=np.asarray(episode_seeds, dtype=np.int64),
+        theta=np.asarray([t.theta for t in traces], dtype=np.int64),
+        correct=np.stack([t.correct.astype(np.uint8) for t in traces]),
+        num_nodes=np.int64(trace0.num_nodes),
+        max_horizon=np.int64(trace0.max_horizon),
+        signal_quality=np.float64(trace0.signal_quality),
+        topology=np.asarray(trace0.topology),
+        checkpoint_mtime=np.float64(checkpoint_mtime),
+    )
+    return cache
+
+
+def rollouts_cache_is_valid(
+    path: str | Path,
+    *,
+    episode_seeds: list[int],
+    num_nodes: int,
+    max_horizon: int,
+    signal_quality: float,
+    topology: str,
+    checkpoint_path: str | Path | None = None,
+) -> bool:
+    cache = Path(path)
+    if not cache.exists():
+        return False
+    try:
+        data = np.load(cache, allow_pickle=False)
+        if list(data["episode_seeds"].tolist()) != list(episode_seeds):
+            return False
+        if int(data["num_nodes"]) != num_nodes:
+            return False
+        if int(data["max_horizon"]) != max_horizon:
+            return False
+        if abs(float(data["signal_quality"]) - signal_quality) > 1e-9:
+            return False
+        if str(data["topology"].item()) != topology:
+            return False
+        if checkpoint_path is not None:
+            ckpt_mtime = Path(checkpoint_path).stat().st_mtime
+            if float(data["checkpoint_mtime"]) < ckpt_mtime - 1e-6:
+                return False
+    except (OSError, KeyError, ValueError, TypeError):
+        return False
+    return True
+
+
+def load_rollouts_cache(path: str | Path) -> tuple[list[EpisodeTrace], list[int]]:
+    data = np.load(path, allow_pickle=False)
+    episode_seeds = [int(x) for x in data["episode_seeds"].tolist()]
+    num_nodes = int(data["num_nodes"])
+    max_horizon = int(data["max_horizon"])
+    signal_quality = float(data["signal_quality"])
+    topology = str(data["topology"].item())
+    traces: list[EpisodeTrace] = []
+    for idx, seed in enumerate(episode_seeds):
+        correct = data["correct"][idx].astype(bool)
+        theta = int(data["theta"][idx])
+        predictions = np.where(correct, theta, 1 - theta).astype(np.int64)
+        traces.append(
+            EpisodeTrace(
+                theta=theta,
+                num_nodes=num_nodes,
+                max_horizon=max_horizon,
+                topology=topology,
+                signal_quality=signal_quality,
+                private_signals=np.zeros((max_horizon, num_nodes), dtype=np.int64),
+                predictions=predictions,
+                probs_one=predictions.astype(float),
+                comm_messages=predictions.astype(float),
+                correct=correct,
+            )
+        )
+    return traces, episode_seeds
 
 
 def _viewer_payload(
@@ -292,14 +396,22 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     width: min(92vw, 720px);
     aspect-ratio: 1;
   }}
-  #edge-canvas {{
-    position: absolute;
-    inset: 1rem;
-    width: calc(100% - 2rem);
-    height: calc(100% - 2rem);
-    pointer-events: none;
+  .graph-stage {{
+    position: relative;
+    width: 100%;
+    height: 100%;
   }}
-  svg {{ position: relative; z-index: 1; width: 100%; height: 100%; display: block; }}
+  #edge-canvas,
+  svg {{
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }}
+  #edge-canvas {{ pointer-events: none; z-index: 0; }}
+  svg {{ z-index: 1; }}
   .node {{ stroke: none; }}
   .node.correct {{ fill: var(--green); }}
   .node.wrong {{ fill: var(--red); }}
@@ -406,10 +518,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <h1>Social learning episode</h1>
 <p class="meta">{meta}</p>
 <div id="graph-wrap">
-  <canvas id="edge-canvas" aria-hidden="true"></canvas>
-  <svg id="graph" viewBox="-1.15 -1.15 2.3 2.3" xmlns="http://www.w3.org/2000/svg">
-    <g id="nodes"></g>
-  </svg>
+  <div class="graph-stage">
+    <canvas id="edge-canvas" aria-hidden="true"></canvas>
+    <svg id="graph" viewBox="-1.15 -1.15 2.3 2.3" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+      <g id="nodes"></g>
+    </svg>
+  </div>
 </div>
 <div class="controls">
   <div class="episode-row">
@@ -449,8 +563,6 @@ const metaEl = document.querySelector('.meta');
 
 const scale = 0.92;
 const r = (DATA.node_radius / 520) * scale;
-const VB_MIN = -1.15;
-const VB_SIZE = 2.3;
 const nodeEls = [];
 
 const nodeFragment = document.createDocumentFragment();
@@ -484,10 +596,16 @@ function edgeLineCoords(u, v) {{
   return [x0 + ux * r, y0 + uy * r, x1 - ux * r, y1 - uy * r];
 }}
 
-function toCanvas(x, y, width, height) {{
+function viewToCanvas(x, y) {{
+  const pt = svg.createSVGPoint();
+  pt.x = x;
+  pt.y = y;
+  const screenPt = pt.matrixTransform(svg.getScreenCTM());
+  const canvasRect = edgeCanvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
   return [
-    ((x - VB_MIN) / VB_SIZE) * width,
-    ((y - VB_MIN) / VB_SIZE) * height,
+    (screenPt.x - canvasRect.left) * dpr,
+    (screenPt.y - canvasRect.top) * dpr,
   ];
 }}
 
@@ -498,18 +616,16 @@ function drawEdges() {{
   edgeCanvas.width = Math.round(rect.width * dpr);
   edgeCanvas.height = Math.round(rect.height * dpr);
   const ctx = edgeCanvas.getContext('2d');
-  const w = edgeCanvas.width;
-  const h = edgeCanvas.height;
-  ctx.clearRect(0, 0, w, h);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, edgeCanvas.width, edgeCanvas.height);
   ctx.strokeStyle = 'rgba(203, 213, 225, 0.4)';
   ctx.lineWidth = Math.max(0.5 * dpr, 1);
   ctx.lineCap = 'round';
 
   if (DATA.edge_hint === 'complete' || DATA.edge_hint === 'dense') {{
-    const [cx, cy] = toCanvas(0, 0, w, h);
-    const [rx] = toCanvas(scale, 0, w, h);
-    const [cx0] = toCanvas(0, 0, w, h);
-    const ringR = Math.abs(rx - cx0);
+    const [cx, cy] = viewToCanvas(0, 0);
+    const [rx, ry] = viewToCanvas(scale, 0);
+    const ringR = Math.hypot(rx - cx, ry - cy);
     ctx.beginPath();
     ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
     ctx.stroke();
@@ -519,8 +635,8 @@ function drawEdges() {{
   ctx.beginPath();
   for (const [u, v] of DATA.edges) {{
     const [x1, y1, x2, y2] = edgeLineCoords(u, v);
-    const [cx1, cy1] = toCanvas(x1, y1, w, h);
-    const [cx2, cy2] = toCanvas(x2, y2, w, h);
+    const [cx1, cy1] = viewToCanvas(x1, y1);
+    const [cx2, cy2] = viewToCanvas(x2, y2);
     ctx.moveTo(cx1, cy1);
     ctx.lineTo(cx2, cy2);
   }}
@@ -538,6 +654,29 @@ if (!DATA.episodes) {{
     consensus: DATA.consensus,
   }}];
 }}
+
+function unpackCorrect(ep) {{
+  if (ep.correct) return ep.correct;
+  const [rounds, nodes] = ep.correct_shape;
+  const raw = atob(ep.correct_packed);
+  const bits = [];
+  const needed = rounds * nodes;
+  for (let i = 0; i < raw.length && bits.length < needed; i++) {{
+    const byte = raw.charCodeAt(i);
+    for (let b = 7; b >= 0 && bits.length < needed; b--) bits.push((byte >> b) & 1);
+  }}
+  const out = [];
+  for (let t = 0; t < rounds; t++) {{
+    const row = [];
+    for (let n = 0; n < nodes; n++) row.push(Boolean(bits[t * nodes + n]));
+    out.push(row);
+  }}
+  return out;
+}}
+
+DATA.episodes.forEach((ep) => {{
+  ep.correct = unpackCorrect(ep);
+}});
 
 const playhead = document.createElement('div');
 playhead.id = 'playhead';
@@ -750,7 +889,7 @@ def save_interactive_episode_view(
         meta=meta,
         max_horizon=trace0.max_horizon,
         large_graph_threshold=LARGE_GRAPH_NODE_THRESHOLD,
-        payload_json=json.dumps(payload),
+        payload_json=json.dumps(payload, separators=(",", ":")),
     )
     output.write_text(html, encoding="utf-8")
     return output
@@ -875,12 +1014,17 @@ __all__ = [
     "compute_unanimous_consensus",
     "layout_positions",
     "load_checkpoint",
+    "load_rollouts_cache",
     "node_radius_for_count",
+    "pack_correct_bitmap",
     "pyg_to_networkx",
     "rollout_episode",
+    "rollouts_cache_is_valid",
+    "rollouts_cache_path",
     "sample_episode",
     "save_checkpoint",
     "save_episode_animation",
     "save_interactive_episode_view",
+    "save_rollouts_cache",
     "viewer_edge_payload",
 ]

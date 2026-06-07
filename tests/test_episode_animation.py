@@ -12,8 +12,13 @@ from src.episode_animation import (
     EpisodeTrace,
     circular_layout,
     compute_unanimous_consensus,
+    load_rollouts_cache,
     node_radius_for_count,
+    pack_correct_bitmap,
+    rollouts_cache_is_valid,
+    rollouts_cache_path,
     save_interactive_episode_view,
+    save_rollouts_cache,
     viewer_edge_payload,
 )
 
@@ -82,9 +87,12 @@ def test_save_interactive_episode_view_writes_html(tmp_path: Path) -> None:
     assert '"edges"' in html
     assert "first_unanimous_t" in html
     assert "Unanimous consensus" in html
-    assert '"num_nodes": 4' in html
-    assert '"edge_hint": "complete"' in html
+    assert '"num_nodes":4' in html
+    assert '"edge_hint":"complete"' in html
     assert '"episodes"' in html
+    assert '"correct_packed"' in html
+    assert '"correct_shape"' in html
+    assert "function unpackCorrect" in html
     assert "edge-canvas" in html
     assert "function drawEdges" in html
     assert 'id="prev-btn"' in html
@@ -108,10 +116,47 @@ def test_viewer_edge_payload_keeps_ws_edges() -> None:
     assert len(edges) == 1000
 
 
+def test_pack_correct_bitmap_roundtrip() -> None:
+    correct = np.array(
+        [
+            [True, False, True],
+            [False, False, True],
+        ],
+        dtype=bool,
+    )
+    packed = pack_correct_bitmap(correct)
+    flat = np.unpackbits(np.frombuffer(__import__("base64").b64decode(packed), dtype=np.uint8))[
+        : correct.size
+    ]
+    assert flat.reshape(correct.shape).astype(bool).tolist() == correct.tolist()
+
+
+def test_rollouts_cache_roundtrip(tmp_path: Path) -> None:
+    trace = _synthetic_trace(num_nodes=4, max_horizon=5)
+    html_path = tmp_path / "view.html"
+    cache_path = rollouts_cache_path(html_path)
+    episode_seeds = [4242, 4243]
+    save_rollouts_cache(cache_path, [trace, trace], episode_seeds=episode_seeds)
+    assert rollouts_cache_is_valid(
+        cache_path,
+        episode_seeds=episode_seeds,
+        num_nodes=4,
+        max_horizon=5,
+        signal_quality=0.55,
+        topology="complete",
+    )
+    loaded, seeds = load_rollouts_cache(cache_path)
+    assert seeds == episode_seeds
+    assert len(loaded) == 2
+    assert np.array_equal(loaded[0].correct, trace.correct)
+    assert np.array_equal(loaded[0].predictions, trace.predictions)
+    assert compute_unanimous_consensus(loaded[0]) == compute_unanimous_consensus(trace)
+
+
 def test_large_complete_html_stays_small(tmp_path: Path) -> None:
     trace = _synthetic_trace(num_nodes=100, max_horizon=5)
     graph = nx.complete_graph(100)
     out = save_interactive_episode_view(trace, graph, tmp_path / "big.html")
     html = out.read_text(encoding="utf-8")
-    assert '"edge_count": 4950' in html
+    assert '"edge_count":4950' in html
     assert len(html) < 200_000
