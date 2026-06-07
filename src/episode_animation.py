@@ -591,6 +591,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <div id="timeline-wrap" title="Click to jump to round"></div>
 </div>
 {eval_plot_section}
+{summary_plot_section}
 <script>
 const DATA = {payload_json};
 
@@ -938,6 +939,20 @@ def _eval_plot_section(eval_plot_filename: str | None) -> str:
 </details>"""
 
 
+def _summary_plot_section(summary_plot_filename: str | None) -> str:
+    if not summary_plot_filename:
+        return ""
+    return f"""<details class="eval-panel" open>
+  <summary>Training evaluation summary (test-set mean, anchored at t=2)</summary>
+  <p class="eval-caption">
+    Mean empirical ε(t) over held-out <strong>test episodes</strong> from training
+    evaluation (<code>metrics.json</code>). Same anchored t=2 GAT/HST comparison as
+    in the paper-style plots.
+  </p>
+  <img id="summary-plot" class="eval-plot" src="{summary_plot_filename}" alt="Test-set mean anchored t=2 plot"/>
+</details>"""
+
+
 def save_interactive_episode_view(
     trace: EpisodeTrace | list[EpisodeTrace],
     graph: nx.Graph,
@@ -945,6 +960,7 @@ def save_interactive_episode_view(
     *,
     episode_seeds: list[int] | None = None,
     condition_key: str | None = None,
+    summary_plot_filename: str | None = None,
 ) -> Path:
     """Write a self-contained interactive HTML viewer with scrubbable timeline."""
     from .learning_rate_plots import stage_per_episode_eval_plots
@@ -982,6 +998,7 @@ def save_interactive_episode_view(
         max_horizon=trace0.max_horizon,
         large_graph_threshold=LARGE_GRAPH_NODE_THRESHOLD,
         eval_plot_section=_eval_plot_section(first_eval_plot),
+        summary_plot_section=_summary_plot_section(summary_plot_filename),
         payload_json=json.dumps(payload, separators=(",", ":")),
     )
     output.write_text(html, encoding="utf-8")

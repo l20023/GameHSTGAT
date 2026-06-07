@@ -13,7 +13,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.learning_rate_plots import condition_key_for_topology
+from src.learning_rate_plots import (
+    condition_key_for_topology,
+    stage_anchored_t2_plot_for_viewer,
+)
 from src.episode_animation import (
     compute_unanimous_consensus,
     load_checkpoint,
@@ -238,6 +241,7 @@ def main() -> None:
     consensus = compute_unanimous_consensus(trace)
 
     outputs: list[Path] = []
+    summary_plot_filename: str | None = None
 
     if args.format in {"html", "both"}:
         html_path = primary if primary.suffix == ".html" else primary.with_suffix(".html")
@@ -246,6 +250,15 @@ def main() -> None:
             topology=args.topology,
             seed=args.seed,
         )
+        summary_plot_filename = stage_anchored_t2_plot_for_viewer(
+            communication_mode=args.communication_mode,
+            num_nodes=args.num_nodes,
+            signal_quality=args.signal_quality,
+            topology=args.topology,
+            seed=args.seed,
+            html_path=html_path,
+            project_root=PROJECT_ROOT,
+        )
         outputs.append(
             save_interactive_episode_view(
                 traces,
@@ -253,10 +266,13 @@ def main() -> None:
                 html_path,
                 episode_seeds=episode_seeds,
                 condition_key=condition_key,
+                summary_plot_filename=summary_plot_filename,
             )
         )
         print(f"Interactive viewer saved: {html_path}")
         print(f"Per-signal evaluation plots: {len(episode_seeds)} PNGs in {html_path.parent}")
+        if summary_plot_filename:
+            print(f"Test-set summary plot: {html_path.with_name(summary_plot_filename)}")
 
     if args.format in {"gif", "both"}:
         gif_path = primary if primary.suffix == ".gif" else primary.with_suffix(".gif")
@@ -285,6 +301,10 @@ def main() -> None:
             str(html_path.with_name(f"{html_path.stem}_ep{seed}__anchored_t2.png"))
             for seed in episode_seeds
         ]
+        if summary_plot_filename:
+            summary["evaluation_plot_summary"] = str(
+                html_path.with_name(summary_plot_filename)
+            )
     summary_path = outputs[0].with_suffix(".json")
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"Summary saved: {summary_path}")

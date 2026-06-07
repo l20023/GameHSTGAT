@@ -461,9 +461,6 @@ def stage_per_episode_eval_plots(
         raise ValueError("traces and episode_seeds must have the same length.")
 
     html = Path(html_path)
-    legacy_plot = html.with_name(f"{html.stem}__{PLOT_VARIANT}.png")
-    if legacy_plot.exists():
-        legacy_plot.unlink()
     beta_hst_max = compute_beta_hst_max(float(signal_quality))
     mapping: dict[int, str] = {}
     for trace, seed in zip(traces, episode_seeds, strict=True):
