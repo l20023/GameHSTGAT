@@ -520,6 +520,31 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     pointer-events: none;
     transform: translateX(-50%);
   }}
+  .eval-panel {{
+    width: min(92vw, 960px);
+    margin-top: 1.5rem;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 0.75rem 1rem 1rem;
+  }}
+  .eval-panel summary {{
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }}
+  .eval-caption {{
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 0.6rem 0 0.75rem;
+    line-height: 1.45;
+  }}
+  .eval-plot {{
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 8px;
+    background: #fff;
+  }}
 </style>
 </head>
 <body>
@@ -552,6 +577,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
   <div id="timeline-wrap" title="Click to jump to round"></div>
 </div>
+{eval_plot_section}
 <script>
 const DATA = {payload_json};
 
@@ -877,12 +903,27 @@ renderRound(1);
 """
 
 
+def _eval_plot_section(eval_plot_filename: str | None) -> str:
+    if not eval_plot_filename:
+        return ""
+    return f"""<details class="eval-panel" open>
+  <summary>Test-set error decay (anchored at t=2)</summary>
+  <p class="eval-caption">
+    Empirical error rate ε(t) on held-out test episodes for this checkpoint.
+    GAT and HST curves share α and ε∞ at <strong>t=2</strong>; fits use rounds t≥2
+    (after gossip has mixed into the GAT input).
+  </p>
+  <img class="eval-plot" src="{eval_plot_filename}" alt="Anchored t=2 learning-rate plot"/>
+</details>"""
+
+
 def save_interactive_episode_view(
     trace: EpisodeTrace | list[EpisodeTrace],
     graph: nx.Graph,
     output_path: str | Path,
     *,
     episode_seeds: list[int] | None = None,
+    eval_plot_filename: str | None = None,
 ) -> Path:
     """Write a self-contained interactive HTML viewer with scrubbable timeline."""
     output = Path(output_path)
@@ -902,6 +943,7 @@ def save_interactive_episode_view(
         meta=meta,
         max_horizon=trace0.max_horizon,
         large_graph_threshold=LARGE_GRAPH_NODE_THRESHOLD,
+        eval_plot_section=_eval_plot_section(eval_plot_filename),
         payload_json=json.dumps(payload, separators=(",", ":")),
     )
     output.write_text(html, encoding="utf-8")

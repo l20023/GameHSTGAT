@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -340,9 +342,113 @@ def save_learning_rate_plot(
     return output_path
 
 
+def training_metrics_root(communication_mode: str) -> str:
+    if communication_mode == "fair_1bit":
+        return "training_metrics_fair"
+    if communication_mode == "vector":
+        return "training_metrics_vector"
+    raise ValueError("communication_mode must be fair_1bit or vector.")
+
+
+def metrics_json_path(
+    *,
+    communication_mode: str,
+    num_nodes: int,
+    signal_quality: float,
+    seed: int,
+    project_root: Path | None = None,
+) -> Path:
+    q_key = f"{signal_quality:.2f}".replace(".", "p")
+    root = training_metrics_root(communication_mode)
+    rel = Path(
+        f"artifacts/{root}/grid_runs/n_{num_nodes}/q_{q_key}/seed_{seed}/metrics.json"
+    )
+    return rel if project_root is None else project_root / rel
+
+
+def condition_key_for_topology(*, num_nodes: int, topology: str, seed: int) -> str:
+    topo_key = topology if topology == "complete" else f"{topology}_seed_{seed}"
+    return f"n_{num_nodes}/{topo_key}"
+
+
+def resolve_anchored_t2_plot_path(
+    *,
+    communication_mode: str,
+    num_nodes: int,
+    signal_quality: float,
+    topology: str,
+    seed: int,
+    project_root: Path | None = None,
+) -> Path | None:
+    """Return the saved anchored_t2 PNG for a training run, if metrics exist."""
+    metrics_path = metrics_json_path(
+        communication_mode=communication_mode,
+        num_nodes=num_nodes,
+        signal_quality=signal_quality,
+        seed=seed,
+        project_root=project_root,
+    )
+    if not metrics_path.exists():
+        return None
+    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    conditions = payload.get("conditions", {})
+    if not isinstance(conditions, dict):
+        return None
+    condition_key = condition_key_for_topology(
+        num_nodes=num_nodes,
+        topology=topology,
+        seed=seed,
+    )
+    condition = conditions.get(condition_key)
+    if not isinstance(condition, dict):
+        return None
+    plot_raw = condition.get(f"learning_rate_plot_{PLOT_VARIANT}") or condition.get(
+        "learning_rate_plot"
+    )
+    if not isinstance(plot_raw, str) or not plot_raw:
+        return None
+    plot_path = Path(plot_raw)
+    if project_root is not None and not plot_path.is_absolute():
+        plot_path = project_root / plot_path
+    return plot_path if plot_path.exists() else None
+
+
+def stage_anchored_t2_plot_for_viewer(
+    *,
+    communication_mode: str,
+    num_nodes: int,
+    signal_quality: float,
+    topology: str,
+    seed: int,
+    html_path: str | Path,
+    project_root: Path | None = None,
+) -> str | None:
+    """Copy the anchored_t2 evaluation PNG next to an HTML viewer."""
+    source = resolve_anchored_t2_plot_path(
+        communication_mode=communication_mode,
+        num_nodes=num_nodes,
+        signal_quality=signal_quality,
+        topology=topology,
+        seed=seed,
+        project_root=project_root,
+    )
+    if source is None:
+        return None
+    html = Path(html_path)
+    dest = html.with_name(f"{html.stem}__{PLOT_VARIANT}.png")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, dest)
+    return dest.name
+
+
 __all__ = [
     "PLOT_VARIANT",
     "_build_learning_rate_suptitle",
+    "condition_key_for_topology",
     "learning_rate_plot_path",
+    "metrics_json_path",
+    "resolve_anchored_t2_plot_path",
     "save_learning_rate_plot",
+    "stage_anchored_t2_plot_for_viewer",
+    "training_metrics_root",
 ]
