@@ -30,11 +30,14 @@ def _synthetic_trace(
     max_horizon: int = 8,
 ) -> EpisodeTrace:
     predictions = np.zeros((max_horizon, num_nodes), dtype=np.int64)
+    private_signals = np.zeros((max_horizon, num_nodes), dtype=np.int64)
     for t in range(max_horizon):
         if t < 4:
             predictions[t, :] = np.arange(num_nodes) % 2
+            private_signals[t, :] = (np.arange(num_nodes) + t) % 2
         else:
             predictions[t, :] = 1
+            private_signals[t, :] = 1
     correct = predictions == theta
     return EpisodeTrace(
         theta=theta,
@@ -42,7 +45,7 @@ def _synthetic_trace(
         max_horizon=max_horizon,
         topology="complete",
         signal_quality=0.55,
-        private_signals=np.zeros_like(predictions),
+        private_signals=private_signals,
         predictions=predictions,
         probs_one=predictions.astype(float),
         comm_messages=predictions.astype(float),
@@ -101,7 +104,9 @@ def test_save_interactive_episode_view_writes_html(tmp_path: Path) -> None:
     assert '"episodes"' in html
     assert '"correct_packed"' in html
     assert '"correct_shape"' in html
-    assert "function unpackCorrect" in html
+    assert "function unpackBitmap2D" in html
+    assert '"private_packed"' in html
+    assert "private-signal" in html
     assert "function updateEvalPlot" in html
     assert "edge-canvas" in html
     assert "function drawEdges" in html
@@ -160,6 +165,7 @@ def test_rollouts_cache_roundtrip(tmp_path: Path) -> None:
     assert len(loaded) == 2
     assert np.array_equal(loaded[0].correct, trace.correct)
     assert np.array_equal(loaded[0].predictions, trace.predictions)
+    assert np.array_equal(loaded[0].private_signals, trace.private_signals)
     assert compute_unanimous_consensus(loaded[0]) == compute_unanimous_consensus(trace)
 
 

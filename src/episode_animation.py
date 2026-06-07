@@ -222,10 +222,15 @@ def sample_episode(
     )
 
 
+def pack_binary_bitmap(values: np.ndarray) -> str:
+    """Pack (T, N) 0/1 values into a compact base64 bitmap for the HTML viewer."""
+    flat = values.astype(np.uint8).flatten()
+    return base64.b64encode(np.packbits(flat).tobytes()).decode("ascii")
+
+
 def pack_correct_bitmap(correct: np.ndarray) -> str:
     """Pack (T, N) booleans into a compact base64 bitmap for the HTML viewer."""
-    flat = correct.astype(np.uint8).flatten()
-    return base64.b64encode(np.packbits(flat).tobytes()).decode("ascii")
+    return pack_binary_bitmap(correct.astype(np.uint8))
 
 
 def _episode_viewer_entry(
@@ -239,6 +244,8 @@ def _episode_viewer_entry(
         "theta": trace.theta,
         "correct_shape": [trace.max_horizon, trace.num_nodes],
         "correct_packed": pack_correct_bitmap(trace.correct),
+        "private_shape": [trace.max_horizon, trace.num_nodes],
+        "private_packed": pack_binary_bitmap(trace.private_signals),
         "consensus": compute_unanimous_consensus(trace),
     }
     if eval_plot:
@@ -270,6 +277,7 @@ def save_rollouts_cache(
         episode_seeds=np.asarray(episode_seeds, dtype=np.int64),
         theta=np.asarray([t.theta for t in traces], dtype=np.int64),
         correct=np.stack([t.correct.astype(np.uint8) for t in traces]),
+        private_signals=np.stack([t.private_signals.astype(np.uint8) for t in traces]),
         num_nodes=np.int64(trace0.num_nodes),
         max_horizon=np.int64(trace0.max_horizon),
         signal_quality=np.float64(trace0.signal_quality),
@@ -308,6 +316,8 @@ def rollouts_cache_is_valid(
             ckpt_mtime = Path(checkpoint_path).stat().st_mtime
             if float(data["checkpoint_mtime"]) < ckpt_mtime - 1e-6:
                 return False
+        if "private_signals" not in data:
+            return False
     except (OSError, KeyError, ValueError, TypeError):
         return False
     return True
@@ -323,6 +333,7 @@ def load_rollouts_cache(path: str | Path) -> tuple[list[EpisodeTrace], list[int]
     traces: list[EpisodeTrace] = []
     for idx, seed in enumerate(episode_seeds):
         correct = data["correct"][idx].astype(bool)
+        private_signals = data["private_signals"][idx].astype(np.int64)
         theta = int(data["theta"][idx])
         predictions = np.where(correct, theta, 1 - theta).astype(np.int64)
         traces.append(
@@ -332,7 +343,7 @@ def load_rollouts_cache(path: str | Path) -> tuple[list[EpisodeTrace], list[int]
                 max_horizon=max_horizon,
                 topology=topology,
                 signal_quality=signal_quality,
-                private_signals=np.zeros((max_horizon, num_nodes), dtype=np.int64),
+                private_signals=private_signals,
                 predictions=predictions,
                 probs_one=predictions.astype(float),
                 comm_messages=predictions.astype(float),
@@ -436,6 +447,46 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .node {{ stroke: none; }}
   .node.correct {{ fill: var(--green); }}
   .node.wrong {{ fill: var(--red); }}
+  .private-ring-guide {{
+    fill: none;
+    stroke: #475569;
+    stroke-width: 0.04;
+    stroke-dasharray: 0.12 0.1;
+    opacity: 0.45;
+    pointer-events: none;
+  }}
+  .private-link {{
+    stroke: #475569;
+    stroke-width: 0.03;
+    opacity: 0.35;
+    pointer-events: none;
+  }}
+  .private-signal {{ stroke: #1e293b; stroke-width: 0.03; }}
+  .private-signal.s0 {{ fill: #38bdf8; }}
+  .private-signal.s1 {{ fill: #fbbf24; }}
+  .graph-legend {{
+    width: min(92vw, 720px);
+    margin-top: 0.55rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+    align-items: center;
+    justify-content: center;
+  }}
+  .legend-item {{ display: inline-flex; align-items: center; gap: 0.35rem; }}
+  .legend-swatch {{
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    display: inline-block;
+    border: 1px solid #334155;
+  }}
+  .legend-swatch.pred-correct {{ background: var(--green); }}
+  .legend-swatch.pred-wrong {{ background: var(--red); }}
+  .legend-swatch.priv-0 {{ background: #38bdf8; }}
+  .legend-swatch.priv-1 {{ background: #fbbf24; }}
   @keyframes node-flash {{
     0% {{ opacity: 0.25; }}
     40% {{ opacity: 1; }}
@@ -566,10 +617,19 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <div id="graph-wrap">
   <div class="graph-stage">
     <canvas id="edge-canvas" aria-hidden="true"></canvas>
-    <svg id="graph" viewBox="-1.15 -1.15 2.3 2.3" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+    <svg id="graph" viewBox="-1.22 -1.22 2.44 2.44" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+      <circle id="private-ring-guide" class="private-ring-guide" cx="0" cy="0" r="{private_ring_radius}"/>
+      <g id="private-links"></g>
+      <g id="private-signals"></g>
       <g id="nodes"></g>
     </svg>
   </div>
+  <p class="graph-legend">
+    <span class="legend-item"><span class="legend-swatch pred-correct"></span> prediction correct</span>
+    <span class="legend-item"><span class="legend-swatch pred-wrong"></span> prediction wrong</span>
+    <span class="legend-item"><span class="legend-swatch priv-0"></span> private signal 0 (outer)</span>
+    <span class="legend-item"><span class="legend-swatch priv-1"></span> private signal 1 (outer)</span>
+  </p>
 </div>
 <div class="controls">
   <div class="episode-row">
@@ -597,6 +657,8 @@ const DATA = {payload_json};
 
 const svg = document.getElementById('graph');
 const edgeCanvas = document.getElementById('edge-canvas');
+const privateLinksG = document.getElementById('private-links');
+const privateG = document.getElementById('private-signals');
 const nodesG = document.getElementById('nodes');
 const slider = document.getElementById('round-slider');
 const roundLabel = document.getElementById('round-label');
@@ -610,13 +672,35 @@ const newSignalBtn = document.getElementById('new-signal-btn');
 const metaEl = document.querySelector('.meta');
 
 const scale = 0.92;
+const privateRingScale = scale * 1.18;
 const r = (DATA.node_radius / 520) * scale;
+const privateR = Math.max(r * 0.42, 0.01);
 const nodeEls = [];
+const privateEls = [];
 
+const privateFragment = document.createDocumentFragment();
 const nodeFragment = document.createDocumentFragment();
+const linkFragment = document.createDocumentFragment();
 DATA.positions.forEach((p, i) => {{
   const cx = p[0] * scale;
   const cy = p[1] * scale;
+  const px = p[0] * privateRingScale;
+  const py = p[1] * privateRingScale;
+  const link = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  link.setAttribute('x1', String(cx));
+  link.setAttribute('y1', String(cy));
+  link.setAttribute('x2', String(px));
+  link.setAttribute('y2', String(py));
+  link.classList.add('private-link');
+  linkFragment.appendChild(link);
+  const priv = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  priv.setAttribute('cx', String(px));
+  priv.setAttribute('cy', String(py));
+  priv.setAttribute('r', String(privateR));
+  priv.classList.add('private-signal');
+  priv.dataset.idx = String(i);
+  privateFragment.appendChild(priv);
+  privateEls.push(priv);
   const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
   circle.setAttribute('cx', cx);
   circle.setAttribute('cy', cy);
@@ -626,7 +710,10 @@ DATA.positions.forEach((p, i) => {{
   nodeFragment.appendChild(circle);
   nodeEls.push(circle);
 }});
+privateLinksG.appendChild(linkFragment);
+privateG.appendChild(privateFragment);
 nodesG.appendChild(nodeFragment);
+if (DATA.num_nodes > {large_graph_threshold}) privateLinksG.style.display = 'none';
 
 function edgeLineCoords(u, v) {{
   const p0 = DATA.positions[u];
@@ -703,10 +790,11 @@ if (!DATA.episodes) {{
   }}];
 }}
 
-function unpackCorrect(ep) {{
-  if (ep.correct) return ep.correct;
-  const [rounds, nodes] = ep.correct_shape;
-  const raw = atob(ep.correct_packed);
+function unpackBitmap2D(ep, existingKey, shapeKey, packedKey, asBool) {{
+  if (ep[existingKey]) return ep[existingKey];
+  if (!ep[packedKey] || !ep[shapeKey]) return null;
+  const [rounds, nodes] = ep[shapeKey];
+  const raw = atob(ep[packedKey]);
   const bits = [];
   const needed = rounds * nodes;
   for (let i = 0; i < raw.length && bits.length < needed; i++) {{
@@ -716,14 +804,18 @@ function unpackCorrect(ep) {{
   const out = [];
   for (let t = 0; t < rounds; t++) {{
     const row = [];
-    for (let n = 0; n < nodes; n++) row.push(Boolean(bits[t * nodes + n]));
+    for (let n = 0; n < nodes; n++) {{
+      const bit = bits[t * nodes + n];
+      row.push(asBool ? Boolean(bit) : bit);
+    }}
     out.push(row);
   }}
   return out;
 }}
 
 DATA.episodes.forEach((ep) => {{
-  ep.correct = unpackCorrect(ep);
+  ep.correct = unpackBitmap2D(ep, 'correct', 'correct_shape', 'correct_packed', true);
+  ep.private = unpackBitmap2D(ep, 'private', 'private_shape', 'private_packed', false);
 }});
 
 const playhead = document.createElement('div');
@@ -853,6 +945,13 @@ function renderRound(tOneBased) {{
     el.classList.toggle('correct', correct[i]);
     el.classList.toggle('wrong', !correct[i]);
   }});
+  const privateRow = ep.private ? ep.private[tIdx] : null;
+  if (privateRow) {{
+    privateEls.forEach((el, i) => {{
+      el.classList.toggle('s0', privateRow[i] === 0);
+      el.classList.toggle('s1', privateRow[i] === 1);
+    }});
+  }}
   if (roundChanged) triggerNodeFlash(correct);
   prevCorrect = correct.slice();
   const err = 1 - correct.filter(Boolean).length / DATA.num_nodes;
@@ -996,6 +1095,7 @@ def save_interactive_episode_view(
         title=meta,
         meta=meta,
         max_horizon=trace0.max_horizon,
+        private_ring_radius=0.92 * 1.18,
         large_graph_threshold=LARGE_GRAPH_NODE_THRESHOLD,
         eval_plot_section=_eval_plot_section(first_eval_plot),
         summary_plot_section=_summary_plot_section(summary_plot_filename),
@@ -1129,6 +1229,7 @@ __all__ = [
     "load_checkpoint",
     "load_rollouts_cache",
     "node_radius_for_count",
+    "pack_binary_bitmap",
     "pack_correct_bitmap",
     "pyg_to_networkx",
     "rollout_episode",
