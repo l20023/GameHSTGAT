@@ -1,0 +1,19 @@
+{
+  "theta": 0,
+  "max_horizon": 50,
+  "final_error_rate": 0.0,
+  "output": "artifacts/animations/vector/n_10/q_0p55/complete/seed_0.gif",
+  "metadata": {
+    "seed": 0,
+    "num_nodes": 10,
+    "signal_quality": 0.55,
+    "topology": "complete",
+    "communication_mode": "vector",
+    "communication_dim": 32,
+    "hidden_dim": 64,
+    "num_heads": 2,
+    "dropout": 0.1,
+    "max_horizon": 50,
+    "train_episodes": 5000
+  }
+}

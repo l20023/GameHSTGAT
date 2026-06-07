@@ -1,0 +1,923 @@
+{
+  "seed": 4,
+  "conditions": {
+    "n_10/complete": {
+      "train_loss_final": 0.4995764493942261,
+      "train_loss_running_mean_final": 0.6184934949874878,
+      "best_running_mean_loss": 0.11666658291593195,
+      "best_episode_idx": 1009,
+      "best_validation_error": 0.05232,
+      "best_validation_episode_idx": 899,
+      "validation_history": [
+        [
+          99,
+          0.10484
+        ],
+        [
+          199,
+          0.54
+        ],
+        [
+          299,
+          0.2578
+        ],
+        [
+          399,
+          0.45404
+        ],
+        [
+          499,
+          0.44524
+        ],
+        [
+          599,
+          0.35392
+        ],
+        [
+          699,
+          0.30744
+        ],
+        [
+          799,
+          0.27244
+        ],
+        [
+          899,
+          0.05232
+        ],
+        [
+          999,
+          0.06296
+        ],
+        [
+          1099,
+          0.3236
+        ],
+        [
+          1199,
+          0.16192
+        ],
+        [
+          1299,
+          0.48504
+        ],
+        [
+          1399,
+          0.16948
+        ],
+        [
+          1499,
+          0.06116
+        ],
+        [
+          1599,
+          0.35324
+        ],
+        [
+          1699,
+          0.3052
+        ],
+        [
+          1799,
+          0.14172
+        ],
+        [
+          1899,
+          0.5312
+        ],
+        [
+          1999,
+          0.45448
+        ],
+        [
+          2099,
+          0.35152
+        ],
+        [
+          2199,
+          0.44592
+        ],
+        [
+          2299,
+          0.31332
+        ],
+        [
+          2399,
+          0.35028
+        ],
+        [
+          2499,
+          0.26756
+        ],
+        [
+          2599,
+          0.116
+        ],
+        [
+          2699,
+          0.53184
+        ],
+        [
+          2799,
+          0.35712
+        ],
+        [
+          2899,
+          0.53168
+        ],
+        [
+          2999,
+          0.35364
+        ],
+        [
+          3099,
+          0.43376
+        ],
+        [
+          3199,
+          0.45304
+        ],
+        [
+          3299,
+          0.35028
+        ],
+        [
+          3399,
+          0.30856
+        ],
+        [
+          3499,
+          0.45304
+        ],
+        [
+          3599,
+          0.35028
+        ],
+        [
+          3699,
+          0.3474
+        ],
+        [
+          3799,
+          0.39716
+        ],
+        [
+          3899,
+          0.14628
+        ],
+        [
+          3999,
+          0.45396
+        ],
+        [
+          4099,
+          0.25292
+        ],
+        [
+          4199,
+          0.09368
+        ],
+        [
+          4299,
+          0.53212
+        ],
+        [
+          4399,
+          0.40136
+        ],
+        [
+          4499,
+          0.33352
+        ],
+        [
+          4599,
+          0.3148
+        ],
+        [
+          4699,
+          0.31148
+        ],
+        [
+          4799,
+          0.43384
+        ],
+        [
+          4899,
+          0.34548
+        ],
+        [
+          4999,
+          0.34928
+        ]
+      ],
+      "consensus": {
+        "unanimous": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 0.975,
+          "fraction_episodes_consensus_wrong_only": 0.025,
+          "fraction_correct_at_first_consensus": 0.973,
+          "mean_first_consensus_t": 6.724,
+          "median_first_consensus_t": 6.0
+        },
+        "majority": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 1.0,
+          "fraction_episodes_consensus_wrong_only": 0.0,
+          "fraction_correct_at_first_consensus": 0.89,
+          "mean_first_consensus_t": 1.192,
+          "median_first_consensus_t": 1.0
+        }
+      },
+      "beta_fit": {
+        "alpha": 0.4743003525,
+        "beta": 0.1146353872993242,
+        "beta_std": NaN,
+        "beta_ci_lower": NaN,
+        "beta_ci_upper": NaN,
+        "epsilon_inf": 0.025699647500000002,
+        "fit_success": true,
+        "method": "anchored_t2_log_linear_fallback",
+        "rmse": 0.07435264057683055,
+        "r2": -0.08308434113843277,
+        "fit_window_t_max": 50,
+        "n_full_series": 50,
+        "plateau_detected": false,
+        "fit_anchor": "t2",
+        "failure_reason": ""
+      },
+      "beta_hst_max": 1.2380784168124472,
+      "beta_gap": -1.123443029513123,
+      "exceeds_hst_bound": false,
+      "convergence_warning": false,
+      "epsilon_series": [
+        0.35250000000000004,
+        0.262,
+        0.2973,
+        0.2001,
+        0.1466,
+        0.1051,
+        0.07200000000000001,
+        0.055900000000000005,
+        0.041600000000000005,
+        0.0354,
+        0.031200000000000002,
+        0.029400000000000003,
+        0.0281,
+        0.0268,
+        0.0257,
+        0.0264,
+        0.025900000000000003,
+        0.025900000000000003,
+        0.0267,
+        0.026600000000000002,
+        0.0261,
+        0.026600000000000002,
+        0.0261,
+        0.027100000000000003,
+        0.0268,
+        0.0267,
+        0.0263,
+        0.0264,
+        0.0263,
+        0.0263,
+        0.0263,
+        0.026000000000000002,
+        0.0262,
+        0.026000000000000002,
+        0.0261,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002,
+        0.026000000000000002
+      ],
+      "learning_rate_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__complete__anchored_t0.png",
+      "learning_rate_plot_anchored_t0": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__complete__anchored_t0.png",
+      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__complete__train_loss.png",
+      "learning_rate_plot_anchored_t2": "artifacts/anchor_t2/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__complete__anchored_t2.png"
+    },
+    "n_10/ws_p_0.0_seed_4": {
+      "train_loss_final": 0.6151283979415894,
+      "train_loss_running_mean_final": 0.6819491010904312,
+      "best_running_mean_loss": 0.045354776233434674,
+      "best_episode_idx": 3847,
+      "best_validation_error": 0.03116,
+      "best_validation_episode_idx": 3699,
+      "validation_history": [
+        [
+          99,
+          0.42964
+        ],
+        [
+          199,
+          0.22084
+        ],
+        [
+          299,
+          0.06048
+        ],
+        [
+          399,
+          0.06324
+        ],
+        [
+          499,
+          0.22372
+        ],
+        [
+          599,
+          0.4358
+        ],
+        [
+          699,
+          0.3488
+        ],
+        [
+          799,
+          0.4502
+        ],
+        [
+          899,
+          0.445
+        ],
+        [
+          999,
+          0.07048
+        ],
+        [
+          1099,
+          0.11908
+        ],
+        [
+          1199,
+          0.11844
+        ],
+        [
+          1299,
+          0.10028
+        ],
+        [
+          1399,
+          0.07292
+        ],
+        [
+          1499,
+          0.04688
+        ],
+        [
+          1599,
+          0.05176
+        ],
+        [
+          1699,
+          0.04476
+        ],
+        [
+          1799,
+          0.04484
+        ],
+        [
+          1899,
+          0.03968
+        ],
+        [
+          1999,
+          0.0542
+        ],
+        [
+          2099,
+          0.0386
+        ],
+        [
+          2199,
+          0.03608
+        ],
+        [
+          2299,
+          0.03472
+        ],
+        [
+          2399,
+          0.04284
+        ],
+        [
+          2499,
+          0.04908
+        ],
+        [
+          2599,
+          0.052
+        ],
+        [
+          2699,
+          0.05072
+        ],
+        [
+          2799,
+          0.0424
+        ],
+        [
+          2899,
+          0.03676
+        ],
+        [
+          2999,
+          0.05044
+        ],
+        [
+          3099,
+          0.03416
+        ],
+        [
+          3199,
+          0.0344
+        ],
+        [
+          3299,
+          0.0586
+        ],
+        [
+          3399,
+          0.0336
+        ],
+        [
+          3499,
+          0.0344
+        ],
+        [
+          3599,
+          0.03232
+        ],
+        [
+          3699,
+          0.03116
+        ],
+        [
+          3799,
+          0.037
+        ],
+        [
+          3899,
+          0.03616
+        ],
+        [
+          3999,
+          0.04552
+        ],
+        [
+          4099,
+          0.05556
+        ],
+        [
+          4199,
+          0.03192
+        ],
+        [
+          4299,
+          0.03316
+        ],
+        [
+          4399,
+          0.03604
+        ],
+        [
+          4499,
+          0.25216
+        ],
+        [
+          4599,
+          0.46
+        ],
+        [
+          4699,
+          0.45796
+        ],
+        [
+          4799,
+          0.45796
+        ],
+        [
+          4899,
+          0.38016
+        ],
+        [
+          4999,
+          0.28304
+        ]
+      ],
+      "consensus": {
+        "unanimous": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 1.0,
+          "fraction_episodes_consensus_wrong_only": 0.0,
+          "fraction_correct_at_first_consensus": 0.997,
+          "mean_first_consensus_t": 6.019,
+          "median_first_consensus_t": 5.0
+        },
+        "majority": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 1.0,
+          "fraction_episodes_consensus_wrong_only": 0.0,
+          "fraction_correct_at_first_consensus": 0.864,
+          "mean_first_consensus_t": 1.201,
+          "median_first_consensus_t": 1.0
+        }
+      },
+      "beta_fit": {
+        "alpha": 0.4998028796835443,
+        "beta": 0.2789539522682724,
+        "beta_std": NaN,
+        "beta_ci_lower": NaN,
+        "beta_ci_upper": NaN,
+        "epsilon_inf": 0.00019712031645569624,
+        "fit_success": true,
+        "method": "anchored_t2_log_linear_fallback",
+        "rmse": 0.0052492863947387345,
+        "r2": 0.9963063665820104,
+        "fit_window_t_max": 32,
+        "n_full_series": 50,
+        "plateau_detected": true,
+        "fit_anchor": "t2",
+        "failure_reason": ""
+      },
+      "beta_hst_max": 1.2380784168124472,
+      "beta_gap": -0.9591244645441748,
+      "exceeds_hst_bound": false,
+      "convergence_warning": false,
+      "epsilon_series": [
+        0.35250000000000004,
+        0.2904,
+        0.20800000000000002,
+        0.1603,
+        0.1177,
+        0.0887,
+        0.0673,
+        0.0516,
+        0.040100000000000004,
+        0.030500000000000003,
+        0.0222,
+        0.015300000000000001,
+        0.0122,
+        0.010400000000000001,
+        0.0088,
+        0.0071,
+        0.0059,
+        0.005200000000000001,
+        0.0037,
+        0.0029000000000000002,
+        0.0026000000000000003,
+        0.0019,
+        0.0018000000000000002,
+        0.0016,
+        0.0009000000000000001,
+        0.0006000000000000001,
+        0.0005,
+        0.0005,
+        0.00030000000000000003,
+        0.0004,
+        0.0004,
+        0.0002,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "learning_rate_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__ws_p_0.0_seed_4__anchored_t0.png",
+      "learning_rate_plot_anchored_t0": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__ws_p_0.0_seed_4__anchored_t0.png",
+      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__ws_p_0.0_seed_4__train_loss.png",
+      "learning_rate_plot_anchored_t2": "artifacts/anchor_t2/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__ws_p_0.0_seed_4__anchored_t2.png"
+    },
+    "n_10/ws_p_0.1_seed_4": {
+      "train_loss_final": 0.04676108434796333,
+      "train_loss_running_mean_final": 0.06510287011042237,
+      "best_running_mean_loss": 0.05721559314057231,
+      "best_episode_idx": 3775,
+      "best_validation_error": 0.0346,
+      "best_validation_episode_idx": 4499,
+      "validation_history": [
+        [
+          99,
+          0.45372
+        ],
+        [
+          199,
+          0.53848
+        ],
+        [
+          299,
+          0.38072
+        ],
+        [
+          399,
+          0.10496
+        ],
+        [
+          499,
+          0.09536
+        ],
+        [
+          599,
+          0.54
+        ],
+        [
+          699,
+          0.30528
+        ],
+        [
+          799,
+          0.35976
+        ],
+        [
+          899,
+          0.1372
+        ],
+        [
+          999,
+          0.32816
+        ],
+        [
+          1099,
+          0.25476
+        ],
+        [
+          1199,
+          0.40124
+        ],
+        [
+          1299,
+          0.35596
+        ],
+        [
+          1399,
+          0.53052
+        ],
+        [
+          1499,
+          0.4446
+        ],
+        [
+          1599,
+          0.34916
+        ],
+        [
+          1699,
+          0.3182
+        ],
+        [
+          1799,
+          0.09648
+        ],
+        [
+          1899,
+          0.23788
+        ],
+        [
+          1999,
+          0.41804
+        ],
+        [
+          2099,
+          0.45444
+        ],
+        [
+          2199,
+          0.06268
+        ],
+        [
+          2299,
+          0.05308
+        ],
+        [
+          2399,
+          0.06084
+        ],
+        [
+          2499,
+          0.04884
+        ],
+        [
+          2599,
+          0.05336
+        ],
+        [
+          2699,
+          0.04496
+        ],
+        [
+          2799,
+          0.0432
+        ],
+        [
+          2899,
+          0.04176
+        ],
+        [
+          2999,
+          0.04848
+        ],
+        [
+          3099,
+          0.05088
+        ],
+        [
+          3199,
+          0.04064
+        ],
+        [
+          3299,
+          0.04576
+        ],
+        [
+          3399,
+          0.03872
+        ],
+        [
+          3499,
+          0.03816
+        ],
+        [
+          3599,
+          0.10844
+        ],
+        [
+          3699,
+          0.03768
+        ],
+        [
+          3799,
+          0.03744
+        ],
+        [
+          3899,
+          0.03892
+        ],
+        [
+          3999,
+          0.0386
+        ],
+        [
+          4099,
+          0.04924
+        ],
+        [
+          4199,
+          0.03716
+        ],
+        [
+          4299,
+          0.03572
+        ],
+        [
+          4399,
+          0.03728
+        ],
+        [
+          4499,
+          0.0346
+        ],
+        [
+          4599,
+          0.03732
+        ],
+        [
+          4699,
+          0.04344
+        ],
+        [
+          4799,
+          0.04172
+        ],
+        [
+          4899,
+          0.03616
+        ],
+        [
+          4999,
+          0.03872
+        ]
+      ],
+      "consensus": {
+        "unanimous": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 1.0,
+          "fraction_episodes_consensus_wrong_only": 0.0,
+          "fraction_correct_at_first_consensus": 0.998,
+          "mean_first_consensus_t": 6.647,
+          "median_first_consensus_t": 5.0
+        },
+        "majority": {
+          "fraction_episodes_reach_consensus": 1.0,
+          "fraction_episodes_consensus_correct": 1.0,
+          "fraction_episodes_consensus_wrong_only": 0.0,
+          "fraction_correct_at_first_consensus": 0.863,
+          "mean_first_consensus_t": 1.2,
+          "median_first_consensus_t": 1.0
+        }
+      },
+      "beta_fit": {
+        "alpha": 0.4999003525,
+        "beta": 0.2531428988076429,
+        "beta_std": NaN,
+        "beta_ci_lower": NaN,
+        "beta_ci_upper": NaN,
+        "epsilon_inf": 9.964750000000001e-05,
+        "fit_success": true,
+        "method": "anchored_t2_log_linear_fallback",
+        "rmse": 0.007617201962591254,
+        "r2": 0.9903951891014534,
+        "fit_window_t_max": 43,
+        "n_full_series": 50,
+        "plateau_detected": true,
+        "fit_anchor": "t2",
+        "failure_reason": ""
+      },
+      "beta_hst_max": 1.2380784168124472,
+      "beta_gap": -0.9849355180048043,
+      "exceeds_hst_bound": false,
+      "convergence_warning": false,
+      "epsilon_series": [
+        0.35250000000000004,
+        0.2871,
+        0.2137,
+        0.1694,
+        0.13090000000000002,
+        0.0976,
+        0.0784,
+        0.062,
+        0.0485,
+        0.0405,
+        0.0318,
+        0.0263,
+        0.0222,
+        0.0183,
+        0.015300000000000001,
+        0.0118,
+        0.0102,
+        0.008700000000000001,
+        0.0068000000000000005,
+        0.0063,
+        0.0051,
+        0.0045000000000000005,
+        0.004200000000000001,
+        0.0034000000000000002,
+        0.0029000000000000002,
+        0.0024000000000000002,
+        0.0022,
+        0.0016,
+        0.0018000000000000002,
+        0.0014,
+        0.0009000000000000001,
+        0.001,
+        0.0008,
+        0.0008,
+        0.0008,
+        0.0007,
+        0.0005,
+        0.0006000000000000001,
+        0.0002,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "learning_rate_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__ws_p_0.1_seed_4__anchored_t0.png",
+      "learning_rate_plot_anchored_t0": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__ws_p_0.1_seed_4__anchored_t0.png",
+      "train_loss_plot": "artifacts/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__ws_p_0.1_seed_4__train_loss.png",
+      "learning_rate_plot_anchored_t2": "artifacts/anchor_t2/training_metrics_vector/grid_runs/n_10/q_0p65/seed_4/plots/n_10__ws_p_0.1_seed_4__anchored_t2.png"
+    }
+  },
+  "signal_quality": 0.65,
+  "num_nodes": 10,
+  "anchor": "t2"
+}

@@ -1,0 +1,19 @@
+{
+  "theta": 0,
+  "max_horizon": 100,
+  "final_error_rate": 0.040000000000000036,
+  "output": "artifacts/animations/fair_1bit/n_100/q_0p55/ws_p_0.0/seed_0.gif",
+  "metadata": {
+    "seed": 0,
+    "num_nodes": 100,
+    "signal_quality": 0.55,
+    "topology": "ws_p_0.0",
+    "communication_mode": "fair_1bit",
+    "communication_dim": null,
+    "hidden_dim": 64,
+    "num_heads": 2,
+    "dropout": 0.1,
+    "max_horizon": 100,
+    "train_episodes": 7000
+  }
+}
