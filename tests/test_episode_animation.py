@@ -14,6 +14,7 @@ from src.episode_animation import (
     compute_unanimous_consensus,
     load_rollouts_cache,
     node_radius_for_count,
+    pack_binary_bitmap,
     pack_correct_bitmap,
     rollouts_cache_is_valid,
     rollouts_cache_path,
@@ -113,6 +114,25 @@ def test_save_interactive_episode_view_writes_html(tmp_path: Path) -> None:
     assert 'id="prev-btn"' in html
     assert 'id="next-btn"' in html
     assert 'id="new-signal-btn"' in html
+    assert 'id="show-private-cb"' in html
+    assert "function renderPrivateSignals" in html
+    assert "private-round-slider" not in html
+    assert 'class="hidden"' in html
+
+
+def test_pack_private_bitmap_roundtrip() -> None:
+    private = np.array(
+        [
+            [0, 1, 0],
+            [1, 1, 0],
+        ],
+        dtype=np.int64,
+    )
+    packed = pack_binary_bitmap(private)
+    flat = np.unpackbits(np.frombuffer(__import__("base64").b64decode(packed), dtype=np.uint8))[
+        : private.size
+    ]
+    assert flat.reshape(private.shape).tolist() == private.tolist()
 
 
 def test_viewer_edge_payload_omits_dense_complete_edges() -> None:

@@ -57,12 +57,13 @@
   .node.correct { fill: var(--green); }
   .node.wrong { fill: var(--red); }
   .private-signal {
-    stroke: #0f172a;
-    stroke-width: 0.04;
+    stroke: none;
     opacity: 1;
   }
-  .private-signal.s0 { fill: #38bdf8; }
-  .private-signal.s1 { fill: #fbbf24; }
+  .private-signal.inactive { fill: #334155; opacity: 0.35; }
+  .private-signal.correct { fill: var(--green); opacity: 1; }
+  .private-signal.wrong { fill: var(--red); opacity: 1; }
+  #private-signals.hidden { visibility: hidden; }
   .graph-legend {
     width: min(92vw, 720px);
     margin-top: 0.55rem;
@@ -84,8 +85,8 @@
   }
   .legend-swatch.pred-correct { background: var(--green); }
   .legend-swatch.pred-wrong { background: var(--red); }
-  .legend-swatch.priv-0 { background: #38bdf8; }
-  .legend-swatch.priv-1 { background: #fbbf24; }
+  .legend-swatch.priv-correct { background: var(--green); }
+  .legend-swatch.priv-wrong { background: var(--red); }
   @keyframes node-flash {
     0% { opacity: 0.25; }
     40% { opacity: 1; }
@@ -101,6 +102,16 @@
     align-items: center;
     gap: 1rem;
     margin-bottom: 0.75rem;
+  }
+  .private-row {
+    margin-bottom: 0.75rem;
+  }
+  .private-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
   }
   #round-slider { flex: 1; accent-color: var(--accent); }
   #round-label { min-width: 7rem; font-variant-numeric: tabular-nums; }
@@ -217,15 +228,15 @@
   <div class="graph-stage">
     <canvas id="edge-canvas" aria-hidden="true"></canvas>
     <svg id="graph" viewBox="-1.34 -1.34 2.68 2.68" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-      <g id="private-signals"></g>
+      <g id="private-signals" class="hidden"></g>
       <g id="nodes"></g>
     </svg>
   </div>
   <p class="graph-legend">
     <span class="legend-item"><span class="legend-swatch pred-correct"></span> inner: prediction correct</span>
     <span class="legend-item"><span class="legend-swatch pred-wrong"></span> inner: prediction wrong</span>
-    <span class="legend-item"><span class="legend-swatch priv-0"></span> outer: private signal 0</span>
-    <span class="legend-item"><span class="legend-swatch priv-1"></span> outer: private signal 1</span>
+    <span class="legend-item"><span class="legend-swatch priv-correct"></span> outer: private signal correct</span>
+    <span class="legend-item"><span class="legend-swatch priv-wrong"></span> outer: private signal wrong</span>
   </p>
 </div>
 <div class="controls">
@@ -244,6 +255,9 @@
     </div>
     <input type="range" id="round-slider" min="1" max="50" value="1" step="1"/>
     <span id="round-label">Round 1 / 50</span>
+  </div>
+  <div class="private-row">
+    <label><input type="checkbox" id="show-private-cb"/> Show private signals (outer ring, same round)</label>
   </div>
   <div id="timeline-wrap" title="Click to jump to round"></div>
 </div>
@@ -281,12 +295,13 @@ const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
 const episodeSelect = document.getElementById('episode-select');
 const newSignalBtn = document.getElementById('new-signal-btn');
+const showPrivateCb = document.getElementById('show-private-cb');
 const metaEl = document.querySelector('.meta');
 
 const nodeRingScale = 0.72;
 const privateRingScale = 1.12;
 const r = (DATA.node_radius / 520) * nodeRingScale;
-const privateR = Math.max(r * 0.62, 0.012);
+const PRIV_FILL = { inactive: '#334155', correct: '#22c55e', wrong: '#ef4444' };
 const nodeEls = [];
 const privateEls = [];
 
@@ -300,8 +315,9 @@ DATA.positions.forEach((p, i) => {
   const priv = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
   priv.setAttribute('cx', String(px));
   priv.setAttribute('cy', String(py));
-  priv.setAttribute('r', String(privateR));
-  priv.classList.add('private-signal');
+  priv.setAttribute('r', String(r));
+  priv.classList.add('private-signal', 'inactive');
+  priv.setAttribute('fill', PRIV_FILL.inactive);
   priv.dataset.idx = String(i);
   privateFragment.appendChild(priv);
   privateEls.push(priv);
@@ -537,6 +553,33 @@ function pickNewSignal() {
   setEpisode(next);
 }
 
+function renderPrivateSignals() {
+  const show = showPrivateCb.checked;
+  privateG.classList.toggle('hidden', !show);
+  if (!show) return;
+  const ep = getEpisode();
+  const tOneBased = currentRound ?? 1;
+  const tIdx = tOneBased - 1;
+  const privateRow = ep.private ? ep.private[tIdx] : null;
+  const theta = ep.theta;
+  privateEls.forEach((el, i) => {
+    el.classList.remove('inactive', 'correct', 'wrong');
+    if (!privateRow) {
+      el.classList.add('inactive');
+      el.setAttribute('fill', PRIV_FILL.inactive);
+      return;
+    }
+    const signalCorrect = Number(privateRow[i]) === theta;
+    if (signalCorrect) {
+      el.classList.add('correct');
+      el.setAttribute('fill', PRIV_FILL.correct);
+    } else {
+      el.classList.add('wrong');
+      el.setAttribute('fill', PRIV_FILL.wrong);
+    }
+  });
+}
+
 function renderRound(tOneBased) {
   const ep = getEpisode();
   const tIdx = tOneBased - 1;
@@ -546,16 +589,6 @@ function renderRound(tOneBased) {
   nodeEls.forEach((el, i) => {
     el.classList.toggle('correct', correct[i]);
     el.classList.toggle('wrong', !correct[i]);
-  });
-  const privateRow = ep.private ? ep.private[tIdx] : null;
-  privateEls.forEach((el, i) => {
-    if (!privateRow) {
-      el.classList.remove('s0', 's1');
-      return;
-    }
-    const bit = Number(privateRow[i]);
-    el.classList.toggle('s0', bit === 0);
-    el.classList.toggle('s1', bit === 1);
   });
   if (roundChanged) triggerNodeFlash(correct);
   prevCorrect = correct.slice();
@@ -572,9 +605,11 @@ function renderRound(tOneBased) {
   playhead.style.left = ((tOneBased - 0.5) / T) * 100 + '%';
   prevBtn.disabled = tOneBased <= 1;
   nextBtn.disabled = tOneBased >= T;
+  renderPrivateSignals();
 }
 
 slider.addEventListener('input', () => renderRound(Number(slider.value)));
+showPrivateCb.addEventListener('change', renderPrivateSignals);
 
 prevBtn.addEventListener('click', () => {
   const t = Number(slider.value);
@@ -623,6 +658,7 @@ episodeSelect.disabled = DATA.episodes.length <= 1;
 buildTimeline();
 updateMetaLine();
 renderRound(1);
+renderPrivateSignals();
 </script>
 </body>
 </html>

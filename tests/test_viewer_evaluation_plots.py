@@ -4,16 +4,65 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 
 from src.episode_animation import save_interactive_episode_view
 from src.learning_rate_plots import (
     condition_key_for_topology,
     resolve_anchored_t2_plot_path,
+    save_learning_rate_plot,
     stage_anchored_t2_plot_for_viewer,
     stage_per_episode_eval_plots,
 )
+from src.training_pipeline import FIT_START_T, fit_beta_from_epsilon
 from tests.test_episode_animation import _synthetic_trace
+
+
+def test_save_learning_rate_plot_starts_empirical_at_fit_start_t(tmp_path: Path) -> None:
+    epsilon_series = [0.05, 0.35, 0.28, 0.20, 0.15, 0.12, 0.10]
+    beta_fit = fit_beta_from_epsilon(epsilon_series)
+    plot_path = tmp_path / "plot.png"
+    captured: dict[str, np.ndarray] = {}
+
+    original_plot = plt.subplots
+
+    def _capture_subplots(*args, **kwargs):
+        fig, axes = original_plot(*args, **kwargs)
+        ax_lin, ax_log = axes
+        original_lin_plot = ax_lin.plot
+
+        def _lin_plot(x, y, *plot_args, **plot_kwargs):
+            label = plot_kwargs.get("label", "")
+            if label == r"$\varepsilon(t)$ empirical":
+                captured["t_values"] = np.asarray(x, dtype=float)
+                captured["empirical"] = np.asarray(y, dtype=float)
+            return original_lin_plot(x, y, *plot_args, **plot_kwargs)
+
+        ax_lin.plot = _lin_plot  # type: ignore[method-assign]
+        return fig, axes
+
+    plt.subplots = _capture_subplots  # type: ignore[assignment]
+    try:
+        save_learning_rate_plot(
+            output_path=plot_path,
+            epsilon_series=epsilon_series,
+            beta_fit=beta_fit,
+            beta_hst_max=0.5,
+            condition_key="test",
+            signal_quality=0.55,
+        )
+    finally:
+        plt.subplots = original_plot
+
+    assert plot_path.exists()
+    assert float(np.min(captured["t_values"])) == float(FIT_START_T)
+    assert len(captured["t_values"]) == len(epsilon_series) - (FIT_START_T - 1)
+    assert captured["empirical"].tolist() == epsilon_series[FIT_START_T - 1 :]
 
 
 def test_stage_per_episode_eval_plots_writes_one_png_per_signal(tmp_path: Path) -> None:

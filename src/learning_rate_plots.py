@@ -97,9 +97,16 @@ def save_learning_rate_plot(
         raise ValueError("epsilon_series must be non-empty to plot learning rate.")
 
     fit_start_t = float(beta_fit.get("fit_start_t", FIT_START_T))
-    t_values = np.arange(1, len(epsilon_series) + 1, dtype=float)
-    empirical = np.asarray(epsilon_series, dtype=float)
-    curve_t_plot = np.arange(fit_start_t, len(epsilon_series) + 1, dtype=float)
+    empirical_full = np.asarray(epsilon_series, dtype=float)
+    start_idx = int(fit_start_t) - 1
+    if start_idx < 0 or start_idx >= len(empirical_full):
+        raise ValueError(
+            f"fit_start_t={fit_start_t} is out of range for epsilon_series length "
+            f"{len(empirical_full)}."
+        )
+    empirical = empirical_full[start_idx:]
+    t_values = np.arange(fit_start_t, len(epsilon_series) + 1, dtype=float)
+    curve_t_plot = t_values.copy()
 
     fig, (ax_lin, ax_log) = plt.subplots(1, 2, figsize=(13, 5))
 
@@ -189,14 +196,6 @@ def save_learning_rate_plot(
         )
         anchor_residual = max(alpha_f, floor)
 
-    if can_plot_curves:
-        ax_lin.axvline(
-            x=float(fit_start_t) - 0.5,
-            color="#bbbbbb",
-            linestyle=":",
-            linewidth=1.0,
-            label=rf"fit window ($t \geq {int(fit_start_t)}$)",
-        )
     if plateau_detected and 0 < fit_window_t_max < len(epsilon_series):
         ax_lin.axvline(
             x=float(fit_window_t_max),
@@ -241,7 +240,7 @@ def save_learning_rate_plot(
     ax_lin.set_xlabel("Round $t$")
     ax_lin.set_ylabel(r"Error rate $\varepsilon(t)$")
     ax_lin.set_ylim(bottom=0.0)
-    ax_lin.set_xlim(left=0.8)
+    ax_lin.set_xlim(left=fit_start_t - 0.2)
     ax_lin.grid(True, alpha=0.3)
     ax_lin.legend(loc="best", fontsize=9)
     ax_lin.set_title("Empirical decay (linear)", fontsize=11)
@@ -287,13 +286,6 @@ def save_learning_rate_plot(
             label=rf"HST max slope ($\beta_{{\mathrm{{HST}}}}$={beta_hst_f:.3f})",
         )
         ax_log.set_xlim(left=fit_start_t - 0.2)
-        ax_log.axvline(
-            x=float(fit_start_t) - 0.5,
-            color="#bbbbbb",
-            linestyle=":",
-            linewidth=1.0,
-            label=rf"fit window ($t \geq {int(fit_start_t)}$)",
-        )
     if plateau_detected and 0 < fit_window_t_max < len(epsilon_series):
         ax_log.axvline(
             x=float(fit_window_t_max),
