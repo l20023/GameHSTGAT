@@ -338,7 +338,13 @@ GitHub README cannot run JavaScript, so viewers are hosted via **[GitHub Pages](
 
 If **Setup Pages** fails in Actions, step 2 was not done yet.
 
-**[Interactive launcher](https://l20023.github.io/GameHSTGAT/docs/viewers.html)** — pick **model** (fair_1bit / vector), **size** (10 / 100 / 1000), and **topology** (complete / ws_p_0.0 / ws_p_0.1). URL hash is shareable, e.g. `viewers.html#vector|n100|ws_p_0.1`.
+**[Interactive launcher](https://l20023.github.io/GameHSTGAT/docs/viewers.html)** — pick **model** (fair_1bit / vector / **majority vote baseline**), **size** (10 / 100 / 1000), and **topology** (complete / ws_p_0.0 / ws_p_0.1). Each viewer shows the graph on a circle with scrubbable rounds. URL hash is shareable, e.g. `viewers.html#majority_vote|n100|ws_p_0.1`.
+
+Regenerate majority viewers locally:
+
+```bash
+bash scripts/render_majority_animations.sh
+```
 
 **[Results & plots](https://l20023.github.io/GameHSTGAT/docs/results.html)** — aggregate β vs q / β vs n for **fair_1bit**, **vector**, and **majority vote baseline**, plus per-run learning-rate plots. Regenerate data before deploy:
 

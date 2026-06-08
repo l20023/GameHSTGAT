@@ -344,7 +344,11 @@ def training_metrics_root(communication_mode: str) -> str:
         return "training_metrics_fair"
     if communication_mode == "vector":
         return "training_metrics_vector"
-    raise ValueError("communication_mode must be fair_1bit or vector.")
+    if communication_mode == "majority_vote":
+        return "training_metrics_majority"
+    raise ValueError(
+        "communication_mode must be fair_1bit, vector, or majority_vote."
+    )
 
 
 def metrics_json_path(
@@ -446,6 +450,7 @@ def stage_per_episode_eval_plots(
     html_path: str | Path,
     signal_quality: float,
     condition_key: str,
+    algorithm_label: str | None = None,
 ) -> dict[int, str]:
     """Render one anchored_t2 PNG per signal episode from its rollout error curve."""
     from .hst_bound import compute_beta_hst_max
@@ -483,6 +488,7 @@ def stage_per_episode_eval_plots(
             beta_gap=beta_gap,
             exceeds_hst_bound=exceeds_hst_bound,
             convergence_warning=convergence_warning,
+            algorithm_label=algorithm_label,
         )
         mapping[int(seed)] = dest.name
     return mapping

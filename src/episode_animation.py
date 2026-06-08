@@ -210,6 +210,55 @@ def rollout_episode(
     )
 
 
+def rollout_majority_trace(
+    *,
+    graph_data: Data,
+    episode: dict[str, int | torch.Tensor],
+    signal_quality: float,
+    topology: str,
+    rollout_seed: int,
+) -> EpisodeTrace:
+    """Roll out cumulative majority-vote baseline for one episode trace."""
+    from .majority_vote_baseline import (
+        build_adjacency_matrix,
+        build_neighbor_lists,
+        rollout_majority_vote_episode,
+    )
+
+    num_nodes = int(graph_data.num_nodes)
+    private_signals = episode["private_signals"]
+    if not isinstance(private_signals, torch.Tensor):
+        raise ValueError("episode['private_signals'] must be a torch.Tensor.")
+    private_np = private_signals.cpu().numpy()
+    horizon = int(private_np.shape[0])
+    theta = int(episode["theta"])
+    neighbors = build_neighbor_lists(num_nodes, graph_data.edge_index.cpu())
+    adjacency = build_adjacency_matrix(neighbors)
+    rng = np.random.default_rng(rollout_seed)
+    predictions = rollout_majority_vote_episode(
+        private_np,
+        neighbors,
+        max_horizon=horizon,
+        rng=rng,
+        adjacency=adjacency,
+    ).numpy()
+    probs_one = predictions.astype(np.float64)
+    comm_messages = predictions.astype(np.float64)
+    correct = predictions == theta
+    return EpisodeTrace(
+        theta=theta,
+        num_nodes=num_nodes,
+        max_horizon=horizon,
+        topology=topology,
+        signal_quality=signal_quality,
+        private_signals=private_np.astype(np.int64),
+        predictions=predictions,
+        probs_one=probs_one,
+        comm_messages=comm_messages,
+        correct=correct,
+    )
+
+
 def sample_episode(
     *,
     num_nodes: int,
@@ -1215,6 +1264,7 @@ def save_interactive_episode_view(
     episode_seeds: list[int] | None = None,
     condition_key: str | None = None,
     summary_plot_filename: str | None = None,
+    algorithm_label: str | None = None,
 ) -> Path:
     """Write a self-contained interactive HTML viewer with scrubbable timeline."""
     from .learning_rate_plots import stage_per_episode_eval_plots
@@ -1234,6 +1284,7 @@ def save_interactive_episode_view(
             html_path=output,
             signal_quality=trace0.signal_quality,
             condition_key=condition_key,
+            algorithm_label=algorithm_label,
         )
     payload = _viewer_payload(
         traces,

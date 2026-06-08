@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Episode viewer — n=100 · q=0.55 · complete</title>
+<style>
+  :root {
+    --green: #22c55e;
+    --red: #ef4444;
+    --edge: #cbd5e1;
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 1.25rem 1.5rem 1.5rem;
+  }
+  .page-header {
+    max-width: 1280px;
+    margin: 0 auto 1rem;
+  }
+  h1 { font-size: 1.1rem; font-weight: 600; margin: 0 0 0.35rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; margin: 0; }
+  .viewer-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  .viewer-graph {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .viewer-sidebar {
+    flex: 0 0 min(380px, 34vw);
+    min-width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  #graph-wrap {
+    position: relative;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 1rem;
+    width: 100%;
+    aspect-ratio: 1;
+  }
+  .graph-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  #edge-canvas,
+  svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  #edge-canvas { pointer-events: none; z-index: 0; }
+  svg { z-index: 1; }
+  .node { stroke: none; }
+  .node.correct { fill: var(--green); }
+  .node.wrong { fill: var(--red); }
+  .private-signal {
+    stroke: none;
+    opacity: 1;
+  }
+  .private-signal.inactive { fill: #334155; opacity: 0.35; }
+  .private-signal.correct { fill: var(--green); opacity: 1; }
+  .private-signal.wrong { fill: var(--red); opacity: 1; }
+  #private-signals.hidden { visibility: hidden; }
+  .graph-legend {
+    width: 100%;
+    margin-top: 0.55rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  .legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .legend-swatch {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    display: inline-block;
+    border: 1px solid #334155;
+  }
+  .legend-swatch.pred-correct { background: var(--green); }
+  .legend-swatch.pred-wrong { background: var(--red); }
+  .legend-swatch.priv-correct { background: var(--green); }
+  .legend-swatch.priv-wrong { background: var(--red); }
+  @keyframes node-flash {
+    0% { opacity: 0.25; }
+    40% { opacity: 1; }
+    100% { opacity: 1; }
+  }
+  .node.flash { animation: node-flash 0.38s ease-out; }
+  .controls {
+    width: 100%;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 1rem;
+  }
+  .round-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .private-row {
+    margin-bottom: 0.75rem;
+  }
+  .private-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  #round-slider {
+    flex: 1 1 8rem;
+    min-width: 0;
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  #round-label {
+    flex: 0 0 100%;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .nav-btns { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .episode-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .episode-row label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  #episode-select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.85rem;
+    width: 100%;
+  }
+  #status {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin-bottom: 0.75rem;
+  }
+  #timeline-wrap {
+    position: relative;
+    height: 36px;
+    background: #334155;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .tl-seg {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: rgba(56, 189, 248, 0.25);
+  }
+  .tl-marker {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    pointer-events: none;
+  }
+  .tl-consensus {
+    position: absolute;
+    top: 4px; bottom: 4px;
+    width: 3px;
+    border-radius: 1px;
+    pointer-events: none;
+  }
+  .tl-consensus.ok { background: var(--green); }
+  .tl-consensus.bad { background: var(--red); }
+  #playhead {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: #fff;
+    pointer-events: none;
+    transform: translateX(-50%);
+  }
+  .eval-panel {
+    width: 100%;
+    margin: 0;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 0.75rem 1rem 1rem;
+  }
+  @media (max-width: 900px) {
+    .viewer-layout {
+      flex-direction: column;
+    }
+    .viewer-sidebar {
+      flex: 1 1 auto;
+      width: 100%;
+      min-width: 0;
+    }
+    #round-label {
+      flex: 0 0 auto;
+    }
+  }
+  .eval-panel summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .eval-caption {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 0.6rem 0 0.75rem;
+    line-height: 1.45;
+  }
+  .eval-plot {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 8px;
+    background: #fff;
+    cursor: zoom-in;
+  }
+  .plot-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: rgba(15, 23, 42, 0.92);
+  }
+  .plot-lightbox.open {
+    display: flex;
+  }
+  .plot-lightbox img {
+    max-width: min(96vw, 1400px);
+    max-height: 92vh;
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
+  }
+  .plot-lightbox-close {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1001;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .plot-lightbox-close:hover {
+    border-color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<header class="page-header">
+  <h1>Social learning episode</h1>
+  <p class="meta">n=100 · q=0.55 · complete</p>
+</header>
+<main class="viewer-layout">
+  <section class="viewer-graph" aria-label="Episode graph">
+    <div id="graph-wrap">
+      <div class="graph-stage">
+        <canvas id="edge-canvas" aria-hidden="true"></canvas>
+        <svg id="graph" viewBox="-1.34 -1.34 2.68 2.68" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+          <g id="private-signals" class="hidden"></g>
+          <g id="nodes"></g>
+        </svg>
+      </div>
+    </div>
+    <p class="graph-legend">
+      <span class="legend-item"><span class="legend-swatch pred-correct"></span> inner: prediction correct</span>
+      <span class="legend-item"><span class="legend-swatch pred-wrong"></span> inner: prediction wrong</span>
+      <span class="legend-item"><span class="legend-swatch priv-correct"></span> outer: private signal correct</span>
+      <span class="legend-item"><span class="legend-swatch priv-wrong"></span> outer: private signal wrong</span>
+    </p>
+  </section>
+  <aside class="viewer-sidebar" aria-label="Controls and plots">
+    <div class="controls">
+      <div class="episode-row">
+        <label>Signal episode
+          <select id="episode-select"></select>
+        </label>
+        <button type="button" id="new-signal-btn" title="Pick another pre-rendered private-signal draw">New signal</button>
+      </div>
+      <div id="status"></div>
+      <div class="round-row">
+        <div class="nav-btns">
+          <button type="button" id="prev-btn" title="Previous round">←</button>
+          <button type="button" id="play-btn">Play</button>
+          <button type="button" id="next-btn" title="Next round">→</button>
+        </div>
+        <input type="range" id="round-slider" min="1" max="50" value="1" step="1"/>
+        <span id="round-label">Round 1 / 50</span>
+      </div>
+      <div class="private-row">
+        <label><input type="checkbox" id="show-private-cb"/> Show private signals (outer ring, same round)</label>
+      </div>
+      <div id="timeline-wrap" title="Click to jump to round"></div>
+    </div>
+    <details class="eval-panel" open>
+  <summary>Error decay for selected signal (anchored at t=2)</summary>
+  <p class="eval-caption">
+    Empirical ε(t) for the <strong>currently selected</strong> private-signal draw
+    (this episode rollout, not a test-set mean). GAT and HST curves share α and ε∞
+    at <strong>t=2</strong>; fits use rounds t≥2.
+  </p>
+  <img id="eval-plot" class="eval-plot" src="seed_0_ep4242__anchored_t2.png" alt="Anchored t=2 learning-rate plot" title="Click to enlarge"/>
+</details>
+    <details class="eval-panel" open>
+  <summary>Training evaluation summary (test-set mean, anchored at t=2)</summary>
+  <p class="eval-caption">
+    Mean empirical ε(t) over held-out <strong>test episodes</strong> from training
+    evaluation (<code>metrics.json</code>). Same anchored t=2 GAT/HST comparison as
+    in the paper-style plots.
+  </p>
+  <img id="summary-plot" class="eval-plot" src="seed_0__anchored_t2.png" alt="Test-set mean anchored t=2 plot" title="Click to enlarge"/>
+</details>
+  </aside>
+</main>
+<div id="plot-lightbox" class="plot-lightbox" role="dialog" aria-modal="true" aria-label="Plot fullscreen" hidden>
+  <button type="button" class="plot-lightbox-close" id="plot-lightbox-close" aria-label="Close">&times;</button>
+  <img id="plot-lightbox-img" alt=""/>
+</div>
+<script>
+const DATA = {"num_nodes":100,"max_horizon":50,"topology":"complete","signal_quality":0.55,"node_radius":8.0,"positions":[[6.123233995736766e-17,-1.0],[0.06279051952931353,-0.9980267284282716],[0.12533323356430426,-0.9921147013144779],[0.18738131458572474,-0.9822872507286886],[0.24868988716485474,-0.9685831611286311],[0.30901699437494745,-0.9510565162951535],[0.3681245526846781,-0.9297764858882513],[0.42577929156507266,-0.9048270524660196],[0.4817536741017153,-0.8763066800438636],[0.5358267949789965,-0.8443279255020151],[0.5877852522924731,-0.8090169943749475],[0.6374239897486897,-0.7705132427757893],[0.6845471059286886,-0.7289686274214116],[0.7289686274214116,-0.6845471059286886],[0.7705132427757893,-0.6374239897486896],[0.8090169943749473,-0.5877852522924732],[0.8443279255020152,-0.5358267949789965],[0.8763066800438637,-0.4817536741017151],[0.9048270524660196,-0.4257792915650726],[0.9297764858882513,-0.36812455268467803],[0.9510565162951535,-0.3090169943749474],[0.9685831611286312,-0.24868988716485468],[0.9822872507286887,-0.18738131458572466],[0.9921147013144778,-0.12533323356430442],[0.9980267284282716,-0.06279051952931346],[1.0,0.0],[0.9980267284282716,0.06279051952931346],[0.9921147013144779,0.1253332335643042],[0.9822872507286887,0.18738131458572466],[0.9685831611286311,0.2486898871648549],[0.9510565162951536,0.3090169943749472],[0.9297764858882515,0.3681245526846778],[0.9048270524660195,0.42577929156507277],[0.8763066800438635,0.4817536741017155],[0.8443279255020149,0.5358267949789969],[0.8090169943749475,0.5877852522924731],[0.7705132427757891,0.6374239897486897],[0.7289686274214114,0.6845471059286887],[0.6845471059286888,0.7289686274214113],[0.6374239897486897,0.7705132427757891],[0.5877852522924731,0.8090169943749475],[0.535826794978997,0.8443279255020149],[0.48175367410171516,0.8763066800438637],[0.4257792915650728,0.9048270524660195],[0.3681245526846781,0.9297764858882513],[0.30901699437494745,0.9510565162951535],[0.24868988716485518,0.968583161128631],[0.18738131458572452,0.9822872507286887],[0.12533323356430448,0.9921147013144778],[0.06279051952931353,0.9980267284282716],[6.123233995736766e-17,1.0],[-0.0627905195293134,0.9980267284282716],[-0.12533323356430437,0.9921147013144778],[-0.18738131458572482,0.9822872507286886],[-0.24868988716485463,0.9685831611286312],[-0.30901699437494734,0.9510565162951536],[-0.368124552684678,0.9297764858882513],[-0.4257792915650723,0.9048270524660197],[-0.48175367410171543,0.8763066800438635],[-0.5358267949789964,0.8443279255020152],[-0.5877852522924727,0.8090169943749477],[-0.6374239897486897,0.7705132427757893],[-0.6845471059286884,0.7289686274214118],[-0.7289686274214117,0.6845471059286885],[-0.7705132427757894,0.6374239897486895],[-0.8090169943749473,0.5877852522924732],[-0.8443279255020153,0.5358267949789962],[-0.8763066800438636,0.4817536741017152],[-0.9048270524660198,0.4257792915650721],[-0.9297764858882515,0.36812455268467775],[-0.9510565162951535,0.3090169943749475],[-0.9685831611286312,0.24868988716485438],[-0.9822872507286887,0.18738131458572457],[-0.9921147013144778,0.12533323356430454],[-0.9980267284282716,0.06279051952931314],[-1.0,1.2246467991473532e-16],[-0.9980267284282716,-0.0627905195293129],[-0.9921147013144779,-0.12533323356430429],[-0.9822872507286887,-0.18738131458572432],[-0.9685831611286311,-0.24868988716485502],[-0.9510565162951536,-0.3090169943749473],[-0.9297764858882516,-0.3681245526846775],[-0.9048270524660199,-0.4257792915650719],[-0.8763066800438634,-0.48175367410171577],[-0.844327925502015,-0.5358267949789968],[-0.8090169943749475,-0.587785252292473],[-0.7705132427757896,-0.6374239897486893],[-0.7289686274214121,-0.6845471059286881],[-0.684547105928689,-0.7289686274214113],[-0.6374239897486895,-0.7705132427757894],[-0.5877852522924732,-0.8090169943749473],[-0.5358267949789971,-0.8443279255020147],[-0.48175367410171605,-0.8763066800438631],[-0.425779291565073,-0.9048270524660194],[-0.3681245526846778,-0.9297764858882515],[-0.30901699437494756,-0.9510565162951535],[-0.2486898871648553,-0.968583161128631],[-0.18738131458572463,-0.9822872507286887],[-0.1253332335643046,-0.9921147013144778],[-0.06279051952931321,-0.9980267284282716]],"edges":[],"edge_hint":"complete","edge_count":4950,"episodes":[{"episode_seed":4242,"theta":0,"correct_shape":[50,100],"correct_packed":"B/HptrUvvXAWI8AB6ACgBACMBCCAhAAIAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==","private_shape":[50,100],"private_packed":"+A4WSUrQQo/p3D/+EQBIa8ZjeAYHGIKDLhn8/hHjVSQscscVYRAQIUTwoOX4kQFH1JY1TCA/5AgOgiFU+s2InCcgT0NXKNPKwkQlO2vhAlxwXbZ6QRWBItK8tSBkWCdt0fTYogICkGmL9g2yjmvrcevDE3VswJfpgOJUjdaRScE9mrqA/UCN5r8Sb7M+Y+wGQzw78GnUasGZVTww9pwKXAIx+upCYZWfJXEgkugKGP8EaTJmRGwEUIC1D1PYgiFf1AS0pL6gS44wMRj9kB/GGXJ3MHBmIKkzEnAlxQEbCI0VjAQ1rFORzARiaT2uJCek+Ko+jJckiCZTG09HzIPBBDHFxKHKb+DZGEiBKAXP8BkhbPinrDZzBhUadoq/ouWjfgnQ/LbFNgbgcgVxu27a7G4ZxFKOf9wP21g8czBUpIiIWdLDtUEoaePb/GLMvCeio7Pqh+lqD8AOF1HUsNO4pDhjImnj8MieSbOijBNukTaDOt1BmWQGRuasE1jhuFOf8IJQjUi45rFgPy9njJAcpXUG0+ld6X1RGAOnBEu+BLeTKX3FI5hzCQySN4EUAGDZY/ElEKg5OI56gUAZvHttqcrf6tmQAiVMx8jmRsvB5gMd6kUbeLMwQxWojGsO2BRNAq8SGVyZDbBQm6If2AqihUbgWjd9fMjcDtralrh4OYIMXsJGFLDX6YYDQeyJtyUSZsfjC2cj0irEQEG+grBhoudDBZ8cYtxxYsq8LQtnY0kaeIar5G5yTU30rqqJEUKtyG7G1Tm5UjqnW8pjbaFJ5EXcKYfGDneVTJyx5DNqK4rVSMLLAW1zeUW40OkSrX5iqg==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.51},{"t":2,"after_gossip":true,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.86},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0}],"first_unanimous_t":3,"first_unanimous_correct":false},"eval_plot":"seed_0_ep4242__anchored_t2.png"},{"episode_seed":4243,"theta":0,"correct_shape":[50,100],"correct_packed":"fpRm75jrW22rRvxPP////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==","private_shape":[50,100],"private_packed":"gWuZEGcUpJJUuQOwziYkEE7WgwS9hDVdjAWUkGUG03ofbcoXI+OEJCnRiztr2mQXxTL/wZeF7qgC1OgjIYSCNsyZEoScKmDTAYwHm+xfGydGQgKCOK5ntEDIJhkS8Emc+PIPd+JeOjosCXZWqQZJMgjzvat8JEkjU60FspwfBwFNivoBLpOlrJqNZ+/ijcGavYgOWQVIo8sPAuOK1icsLSSl6DuPCKxOA7ISw4cLgLVUFStC2ARYM+Gyup4CsZDSeMNs15MoFGBxU80LkMQqbjrLtkesG5xUS5wiJSTeIlF0iasBL6EPMVq1f8qkBLTnGqBrakNHfw++SsSkp7G8alxHMj2P6ZybdVgsdY/A+SBAB3VCsRDUUrowBlSJ0HwHnGZ1qQRe2jGcPC8dUf1XapTVyCPF1OKskzgBvsFbNSW+grj69SFtGsuLn43YePlMW0RDnV12gc5uiDkdrAhQJtsqpIAZwussdpel6ZwTEgyDy56A+oTR1tanKk40qnIgco+Bxj4bcmoHCKkw660r4N5rNN7nMTl/vgTuq4ITKJJAU3bfOYZu6iQ5wBgkdUu5UOC4QgsjFKqpAIdS0UNfrsTSjkNNuGQFzJKBBI0LYRF4pWxD7VdOSXoEpcrlAqxlxwKC60pON6CvOXQrQQ3LqGk+gjUgfGmQjKuvzr8ANLcbV6tdgWN8jaYXQcEDtR1HhlynVj91xktdbUOo6ZjAxrYMzaNd/LiGipEtCTHYwRBQv4M3TTsTJjGLW97ycDMrVloEAkzZU7eIJInZvxz9sA0mGIaq44s48CG4QT+pRxf1AylsHNAwxfYI2hyTqBGgDA==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.6},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":true},"eval_plot":"seed_0_ep4243__anchored_t2.png"},{"episode_seed":4244,"theta":1,"correct_shape":[50,100],"correct_packed":"Un/N94yzWcwn/1lyj////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==","private_shape":[50,100],"private_packed":"Un/N94yzWcwn/1lyiUYvJOQmNP/h6EHWpKUdb2LYO2rZokvM7f+7nviNdV25SA62/CtPyEzry6zDfoozBchkS197ex5HP8z3E/6OqDEjnuEw7eYWm9TtqfxAIn7LNcdgz3la41IElI562wcGL4tWPFjeYyYJqbFKENlWoa/5ZWEWGrMr6lmGAYn3zylxgKtG9YsakUs4Uzu2nbqMfrtuxpikeMXUb9IEZej6l+Pbf34O/2cNLT2dSwq/ihVhkT33oEfys6czf7a5Cnv/B2ZzzrbqOwkykdnD8mu31S07U8b9Mxzb58rHrY/9a7teG/6tN87uSvcdzvuxmeQz+S+ytb9YSTK7S6at1ts/Q08zfHDuGtKuO3wP/KrZws1TWZuay0SSmK7rUpTHOzuXvm9Z2m3XcguKes4Qrjefow4m1qggaoOH7zEEEO7VvU6jpr+OAeJEH76OJnDOd+pYsKbZkN3M4nY1f05XTvdK3+t0/lCjo2jw9KuhPYx8zR3+0voOeOTXR+chnAcWn7g98nV4pNH3vG/jDfdwXNhrJXj/r9I1skDaHBXXj23/dgj8NmvvU/yvEPOiZfejEZn/cHeH5lD8hTKhi5722f9VxfCYG6nT66OpmbdOqzaFs0VVrt+S15zkOhxLCxgM8vZ5Htm3+gPvHBTeThxlTdyN15en83NZMgrNDe0qvf+b9I0eTgbvmnhfpVTf5EsxbQVuoDHvIDym9TeOteQ/d9t9cXisn7N8q59tIWmW/uqb6cUpFcD74axXIWoQb6Nwc0S3VndLecnu9FeOm9VXHVhHixZjt/dvjYD4edsSg+ntyQ/6kTTknw==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.59},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":true},"eval_plot":"seed_0_ep4244__anchored_t2.png"},{"episode_seed":4245,"theta":1,"correct_shape":[50,100],"correct_packed":"6BJn7qNdbJ4H7vn/T////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==","private_shape":[50,100],"private_packed":"6BJn7qNdbJ4H7vn/S8oQYRnHmj6/XRxhZhvP31dr8GB2rJYEVTrsJ3K9sUNAvdXzs/fHPiPbJ/+2+FoTzDXa91EJ+PyMe19snDGA99E7HX1AzEjL4ueueuFIHjVd9y2DvMK/YMhgl0/PJf1XxxbE1O1Dyn4pn9pKon1tIJN2y8ztD+/S0s+CO5psMaZZsz69S6m5UKG2/jJnvfvN1gu/k+s2f6YNKcAlvqGxbTjRyezF5OLez+fvNNialB/QQrwvbfsqB6kbvX+5KnViIk6xj/wYWfTmr6TkftkCsYKWYTUZVPPnByOTL55dTdQQeHeLdtvff04+8fPMadqFXYiUwxpE/Iv1EpykeNIkkxraHOcv9mW8IaHxDKR9KctutP0jR8v+zr7XIj/m3enUGAW97vrpU0tOX+SY8Ienm+M/3ngX6eiB9vm0Xh2MnNeh+qsF9rctXbWuWvP6fi7BBxP5Kee/Bu5coUHYHoeFoNE/ffO/UjHBx/8HHTWKC24g8y7DNm+BOuXy9Mzm2WloK2Lcq3T49DuY9M+EMtfgOjSJt3/dK3ftYZJlT9T/+rdBPxR9vzpciZRwH/M8/1BCsLwmSPfK4snk9e8KkbTu0c4/0qbzCSbGQpXLdx0oFFP57t9MTKkLTOWVpMvnvkW8Hz7kLbPmACEYYr7UvDjP8NksXZcmO9B9JmfWzBwDGZuVJtaHetoufbnAha8dEPbSLQg9Pod5PO1ktK4KmcBt+vHtqk/hp+dsNLP+A4eOr0Tsx0a07XbLhCOn6ypOvQht/T6jsJRmbLXs5R9c3SVd4LeibfeoN/xQfa7Bdy0jo2UdKvztDw==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.59},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":true},"eval_plot":"seed_0_ep4245__anchored_t2.png"},{"episode_seed":4246,"theta":0,"correct_shape":[50,100],"correct_packed":"94LiAQPkU+9egagQkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==","private_shape":[50,100],"private_packed":"CH0d/vwbrBChflfvYjHU72KAxO7SxqwYXyIQHTF/bETuCE1GYcDh0pghdj8D7oARp5jAEPKqzaWU0Awhgx78PEAfkkR+hUV9xjjB4EylvCmxVzoD9NjeQGgoCAUXElpENs8BYyhsTIS9Z82ABKEGOdcW0AcxJcgnI0HnBALEFhfIMp1gjSrZmqR2fQUGChKr0IoMXPYjDLqh1iShr3q3l9OQ6wtagPO4D04Gl1lAvbDgwx0hwShwDd0fCdxCAttkSFCUgRyPDBXOZeXfBhXEfxGS+1oHHAT5MMVy3IcKMl06g1KpYT2niJTcfPlQCFRBckomtvIFJqpIuC8vmTTGwjB/VlZRvbI55iBd6f7A2B4WGS7uTbSjOC5dU5f2YDIo4rQG6rAaCmuSHE9kydlryGSQYyz1yZJcTPToiz0UHKKJQJ4repF6j4R7gukaoyTOiLNAHWinoHwTVCb4qVnwK27CXwePtXlr3sO0GgkfYQZW47CEEaATHEgxoZxChCEv+oCZe5Uh41Cz9gjvw+uWb06BmxiQhIVTEQfIKHZjwBqElY2TTgUmRzBmFsW7FbYymvPttugMLETQ4dLaQqcBsQ/E2WOlQPiJJ68VI5OfQI+06iLOAm65Qcs3zoSBpt8E3IYSGm8iqJ4GjhJgdBHespGMUWh1fo0uqQovgjM8o/DiV0k5eKIAeWKIHMjPmgkAavnYT0cFgDs0GFpK7oTFU5JYSjd0vg53iEd1REwcQVRYifZCAwP5OvBVzSFKySDYGdzNc1uXIEIr5iddWJXSQjJPIUEfbUiaLg6FuDO4FPU1+rudXDOjgdSDVAXELSfVbg==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.56},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":false},"eval_plot":"seed_0_ep4246__anchored_t2.png"},{"episode_seed":4247,"theta":0,"correct_shape":[50,100],"correct_packed":"9RGKm8BBsd7TEHx1UAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==","private_shape":[50,100],"private_packed":"Cu51ZD++TiEs74OKqQlypCJUtKhGHoakgV+hkdz1xsCCIIyDZFEhcNp0+ger7rkZEVjVIV+E33hGgFoZ2l8e6c80uBFZgo02bATDkiAUGPNCMz24DbaEY5SUmj2AInePxzcJo0OCNhTfQFCxHJ1aDgBBYIjzVHZCK0nUlasn/B4AuJVl9I45BU+ZaZYP1/7meEaZAh+tpyR3HjKLSJtVgjQ79SSkzCtF4K+1L6KKBII/DPaQIh3GbPSiCA5muHwgWTxTEliVoxXRiBIovuAVBjgXTVB1jlrv2kJmHZSmBBVUBE8AMEirpAMgMWpyZrBrR4h0J6GNkAobTfFmLwwExBVUgRhXa4WUXzD/0QpewLKTuCDzD6yEQRB1BKhXNgg1XXDubDFASq6IaDmJqfRfBie6IJQEADd+AZbATnhN7DWTn78djxnSJyFd+w/oACcSBOl8YcClYb6iQ2SSAqV3gsgyGEo0GihkKZbrMCqzqNJmIARzB2SKw9EgCNU28DTJUG2vI9lRpJuYlVV+4MJyBYOEAFGPBGTyMVUScE2JWC4RKtHWNWZD82gJWQChRADwIHZc2MMd+aRWtkW9xOBJBHPCy7HimGCkS4iwvz6tOMkty7BEaU6sOt8gaWajuGYasTo5oIIwGFuYiwBxW9m/CjETJXOgNHGRwBmlzYpSWDoDXOO6S5KgDgGTPH5w6Qgy5su1ojIdfM9qE+itOB9LmCWLZUoAUgslm69ATkhEqZoCtQkKaHooqItdgdYJOoV/UPgRXIb2xNon4HBOfwGrjLNBV5WhW0qCBmAAyiKFsaQr/zfTSpn9SXiZSEWs6goYNA==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.52},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":false},"eval_plot":"seed_0_ep4247__anchored_t2.png"},{"episode_seed":4248,"theta":1,"correct_shape":[50,100],"correct_packed":"+/7LC2yy92Kuzum+r////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==","private_shape":[50,100],"private_packed":"+/7LC2yy92Kuzum+pNUf/NNr99qIqWnX9sW896nSLdmKMDTw7sSqbxbHa8sK/3ztbIP+w0+WLtfyabZJD3od3b9VmoLGrXCZ0CkujLiA4FRz+4J6v06T/jUvHxowV4bk8JXkrX+t9veDzzom8qMxlcKvajXm5/Ew9D4wX8cdz9BBg6Mlcf+utxWyU5KE4V3JYio+KghrGLGttH9D/ZQOV5l3ZbLdi8L36dXpPYy4vJivrwiWV89aq0fzeYF4nvbtE/Yrkk8lrkupB149qCn5zH0628XSwf+mWynt/Hbx6xIrzfNnEqWX8EbciAcZ4uWTVXH4NvvPaHB2z66RyWmRB7n2ss2alCCzz++s4CuzPgFB9AuxFOjGDPnuf7xJad1l+agmOQ4LmROsW5O6BgMnwA4I27juzX9LxKWLS8K9+NfpB65//KjzPUFPn9jzX6acdxXWA33D+9o/h4oodixuN9s8sJ6JnJMC3y6DpF+b+6xrulpTtQz3BdlK2deH+zFA4bsTk/dx/0XfHSNzwd5ebLQ2mCuzHHq6itGv6M1/de/9CrHBFkaidX/bd/Cwbqhc+1yuCfZK5UsoOOrFpn0qPzsvs4I8nK27z/c+GKOp+dzQIPaXP50YvfFVO8fdlBjZjhIae48L8k7xpZG3JmQXRN7X5a4vwb8Pf/dC9UY2yvKN1hl0d29+ryuQgVOnh+AQ91fLreBCL0arjy2rgzUQHSe6PegHtjyDu3iGS037g/WZZpkJRLumMdX4jv2fw1N72vO7VbnTUU7dna/+4jCSbsk8Pu0ffzIbsxTLp0BrvgDxfDXY+dVmW91rcl6Vr66+fQ==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.63},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":true},"eval_plot":"seed_0_ep4248__anchored_t2.png"},{"episode_seed":4249,"theta":0,"correct_shape":[50,100],"correct_packed":"FpA03W6a/Maev3V+3////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==","private_shape":[50,100],"private_packed":"6W/LIpFlAzlhQIqBKYRRxKUNsL/EAbWiktyZWdK6Ixy8AMnnlQq1S+2XXyKSQp7AcJzGi8EydgF0a1iFjMeoVSFlbVZIo7dA7I+ApIy4f+DJ5YMsTZT7o9Aho61wN1yIyAQq6gzQPDQ4XyUoKE2Uua5DSP/8CB1C2D1nooxsW+68GmL8QiGDeLekAoAEQzKAwb2KCTygWjNpkgucCW7KBgnBydSrGudcL1sSYkbZqJg0MIdqyD3NiOCsknyQch1AqDwMs8Osxk1GophBWFZWpDrpfaE9WGMGjqFjHPDJWzOQbYihoHIWIeDmD/JK03hQUqTQFMSCQnKZ6e6kKML4h6kJnZEy4Bh0BaAtSHYB4Z9AEdwBD46fCSWmn4kjiYSSI3eVk/VVYw0pnCCKzkfKLUGLRo0eJbMOuAVcVl2fFS0N+YFEBkIMLSYW5FcYx68htevMGauHX7OoyUCTDYwaXZfRhxPlgYjYiR3V1bR5qGVQCISngjB2shh08IfMCIpggqcM1Cr2wG3hR4zjNz+QLTYRAlMcBGyUqaKPENwD24kjblP2CpRhWR2adYlkAiE6+G0XCypAujYTE/xsBPaS5JaggsEBSXM0QGFAABHZwwJT2sonAR5CQWOmeLNYOQoI2AX4XFqqJPvImoAwVU5FQ7X5OK0ahV6ebeSZGOVHu5EbrsoY8agVJDRHlKiQjHi8eESXT/QZKVCc1GCq+InNwjHLN/MPQjfgIQnkwEDXrRVBmk3DXGTr9oOdR6DKN8BjYAoATYPU815oQJIXw+RFH4iTPAHJ+nZs93JFQAum0NAH8tKF8WVwgy3wkdvkMhp2Kw==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.59},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":true},"eval_plot":"seed_0_ep4249__anchored_t2.png"},{"episode_seed":4250,"theta":0,"correct_shape":[50,100],"correct_packed":"ab+PGL8JlZqX4fkcL////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==","private_shape":[50,100],"private_packed":"lkBw50D2amVoHgbj0eKJ6NZqQsSZ9XpIyARA3snjjbQKF2fosf75lCcHTtHz4GkWumF4ICd30RULes0OG4/jJ2Qkx8+OJuU+3gDYFcGDAokojThMsDBzA5vsB1mETQiwEvlE6Wod6BndbYQjMR7gPEoTspvSU+Ie5xLcZVEQc1bI+JwGdrJg13AGgCHNk4tRsOPh35Fg9mVh+b6pdpCPjIRUyUxGuH4wLmNFvT3Lb42e9sJuMCC3HwWbKz3oXKxjiRHND4YtM+yotwPiXvpaOBTvDcgkkHfXARaP6YAo3yJkgHWOGh5tPNEYiF+ygzJxQDuk40Ug6bHpqgjNhRHdcQjs/bgHsR/JUAq7ZUGKOPcdUjXbEFhnTyDNGPh4+M20QEaRWUZwS8GMZOyIdRAseVK1o79njqQRUhIt5w0yutd6SB3bVqcloTQqJo2AWA/ASSfFIJEKUYHMSNb5wXXuhgA+QEhSBZAyOvgoXgIkP57MoR5ydKmxUtJ+gwgC8PPcw7HQBmvl/5aKiAOFzDMEEBl7bj3G7C6SyCnowwyxAnb0kACdv7lb6WGVxBLa1MxO1SaBkLiRiKjnUJsChkMOA2oa3L0RhNFF/ZlfP5jThBhiXgcGi2AmD8B5Pwf03YkRFRfuQscPrfj2AuuUza1ydXRUZKZvqL4EDuBr4fhey3b4rQHugCFkVyaDEhiOCi9RC9AQil4CLYWYNiDNU+gYiQkjtH5rHVhMWkfSJMR4iGCIp1Vh/V9HUJ0zChmYRk/czDPH6b+yw2aJe87orucI1A76EoK5oAxxtcHsWmbYJEQCGaViIWwrSedSCfWTEBA2Ww==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.54},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":true},"eval_plot":"seed_0_ep4250__anchored_t2.png"},{"episode_seed":4251,"theta":0,"correct_shape":[50,100],"correct_packed":"Z/N8KXxz1tlkuudSP////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==","private_shape":[50,100],"private_packed":"mAyD1oOMKSabRRitxrGY8zMYyJiGpUsSsXRIyDIwYRb3tuVpqAV7oo69f6/toe+4tCpgpgjNkhVumIFioXyJOz/jHJ2HJT5iaOF6FwwANEBAwTPQMEPNl1x0/GJGH7LCyOPFfZQmXlXI2Y1ShLSDfgw2RZXUH5fBCqY48GCNb8U40CS+1+uw5+XuwhAEMg7e8GuTfmDYmgYwCRGVZ9ILu3/ECVq7vDI+IhBAN35UETNA6o7TQxCulDZQPwVTnQAJ5ukT9QLn+EiLeZcZhdNK5VKuEQHJOg5PRLKZAwswNDQ0Q/H7XAypXqCOfhkXT8b5Yj+AdSktBt6SeCyRHi8zbc4JSpKlKQLvUSp8Zuvk3jMVEQLEkpMxGuaW13QI/nA2a/LlKXj2eoALCwI0v9dBlW5KizqY49UpNPC+eo+Wy4oNiu7aYLlg50IslqW1JSdhwJCVJ0m7GSByuoP+vIu247/7A2JnDtcVDtuGBh79KBAZAaiB7HfsEhYlUGQbIRMmiOiKLA2wE51OxDJsThsJRgjf6gAyZnwiQG5aBxDb0DmmLuEmmUERYFU5HnA8Aj/niQHg87g6JMPxtlJIrRvOEgmgShgDcMX1ZwnFCMWIGEEFkJqQ0XwUmZUN+hIw6QYLqpsBHIWgDnkCiYDmrUOyOJRbUe6+jEVqpYoGsNmZ5sGFA+aHlYCZm0SGGK5B10msNBslIRRDBhEYfsi3Mt7GEsEfYPkFUQHnq6o0GtbBQmPDp+nYulJHuMgwWE4guJYBJ3Joi7RjPZ6RiYRnILjhYg6/wa5BiUQZLSLE0uswYAEOjJ9VuUvDWFFgiDGGh0KbdA==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.58},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":true},"eval_plot":"seed_0_ep4251__anchored_t2.png"},{"episode_seed":4252,"theta":0,"correct_shape":[50,100],"correct_packed":"LiPQ65wxIQIvUIo8YAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==","private_shape":[50,100],"private_packed":"0dwvFGPO3v3Qr3XDl89gW5FJbNxfSuc9qTF0htuloRSisxNBugGLFpJpMTtiKXLJH6oby0UwBR/N4JyiVO1vktnIEJSHx8RGwEhXPq2SxxDA9CclAheiKPA6fSqAxUChEpQYgWNWeqFyZTjk7VDOBmjGI0i/JoSObFta48Go0qoPd9ANgx2gWS436jNjLgQSpfwg9x2fkKcPRHsOFqOewZSGsG+KwWyzODkQOnKXl2MzCaUSGunLPsDqJO1I3RCM2XCpba++RWOTadoiKVYEsSnjiE0N5CBnJEYREIQT2CjVPtGHkObEWKMWJhmEZ10Kfhgw4GxTnyPvPa1tqf/KJ6IImxINqmjklLzc+LGSYhT+fcQxkvqNMGHYbbszAgwUsG8JHE0MxoohAmGjghAR5mN6lt7jIk9kzqvPLDrMeJ2klN8ptsDD8iSmsFI8hnVL7MG80hOFXPBMElniigBAxwriEInQVckCzSn3RWOW7lfAMIr9tHFcGje/cMGmkovkZZCMGDwyqvIAVZiyOUUBLipyGD3BrRxgV2kGhkiwRUIZHpLXKTapABSucQ1FGeDAIOqjAfDQqWoo6rHMeBBJiMB4mpBrR/pqCzsl4AI8NA5qQEQHOFxSQ4DRshcVQKQHAqMGoVQ1rYKyN8HgEC/WBEMewKK4CCXEhF4RIz8mBhrxb0OCnzRfRbm1MBnFV9vpE7UKw187gpgOCmHLqSXJyYbwpLoD8biIBV5cZIYybqYdavklg50ylem3WBmI7aNVscXvKKhF0dHlTGwHRyPR62pZUsonH1a5BoVYoYZoEMawgbVMgRelGyvWaUkJDCm6wg==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.58},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":false,"unanimous_wrong":true,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":false},"eval_plot":"seed_0_ep4252__anchored_t2.png"},{"episode_seed":4253,"theta":1,"correct_shape":[50,100],"correct_packed":"My3RVt1G7zd4pJR6v////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==","private_shape":[50,100],"private_packed":"My3RVt1G7zd4pJR6u8hD7ReuSXiKLfQq56j+fWxBeu4T2Mw5k7U2SHo+XTmA2RXVsb571J8HFn158N8/KTwF6Njb1ZH4X8qjHvtOpzlAnV0XSDtmqcMPNX42L2svI76N9w/syppwXdJcjf/B9/us6Fr2pcStqjLeZb7uQzeTP2POl6EdBq81x+lVVfiFNIRVO7vbTtCLujDYnb+7Jx95O2ekE1RDquyEpnuOWz4f3ykroyfn8jll/n2JVN3n8v9SmpN/c1Lqcq23ojL2KtkNHetbf3OBq/G2Y/bYVP6um4Z/6J2WPhVHRj74VuVzIdyq6V0Z//9OCk2yz++Ks1hGZEvzfGc2MW35IsH+eiT6tu+Hv32iWZPx6eu8bJgfTRhDE3W2zRQA6enO2NyIupHj3OG+0QZm1FVSQc6hm8xxp8Di59+MeY2GGLskQf/KyLSG2laWlSCF052H1mk98FW9qHdu8/Nm/Mli8dxZ8eVtvoNi0XDAzSDsLpkJISn0MfRV9EaT3/1CPH8zz0Gth2vb8R97M+xo8CXB08KpeKXrXXG3slXQGQK9lZbheFsk3wNCbDTCX+S2M5awf3byaz8lHPp/tvWfZNmFaDyCtlPesD23WShuOOOZzYjgbsnm7VlnL8WBl2XjAwkUIdQ/AuZtx7+si5nmrPv1drxzn9P9Wa3Tt+a02eTeB6rel+4trFN7MNGIpbJyHyTbPDuz9okHelueQa4tVOeo92nNU4zJ5JyFFOetW/D2YTljj2S+Ro/YbKOtQTRKZXT/HfbZpecftTklcMp+k/Ptxe2D78pDxeloibVoMa1xTfLUFcuJQkbhGw==","consensus":{"per_round":[{"t":1,"after_gossip":false,"unanimous":false,"unanimous_correct":false,"unanimous_wrong":false,"agreement_fraction":0.55},{"t":2,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":3,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":4,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":5,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":6,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":7,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":8,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":9,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":10,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":11,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":12,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":13,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":14,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":15,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":16,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":17,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":18,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":19,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":20,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":21,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":22,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":23,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":24,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":25,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":26,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":27,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":28,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":29,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":30,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":31,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":32,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":33,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":34,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":35,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":36,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":37,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":38,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":39,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":40,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":41,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":42,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":43,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":44,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":45,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":46,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":47,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":48,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":49,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0},{"t":50,"after_gossip":true,"unanimous":true,"unanimous_correct":true,"unanimous_wrong":false,"agreement_fraction":1.0}],"first_unanimous_t":2,"first_unanimous_correct":true},"eval_plot":"seed_0_ep4253__anchored_t2.png"}]};
+
+const svg = document.getElementById('graph');
+const edgeCanvas = document.getElementById('edge-canvas');
+const privateG = document.getElementById('private-signals');
+const nodesG = document.getElementById('nodes');
+const slider = document.getElementById('round-slider');
+const roundLabel = document.getElementById('round-label');
+const statusEl = document.getElementById('status');
+const timeline = document.getElementById('timeline-wrap');
+const playBtn = document.getElementById('play-btn');
+const prevBtn = document.getElementById('prev-btn');
+const nextBtn = document.getElementById('next-btn');
+const episodeSelect = document.getElementById('episode-select');
+const newSignalBtn = document.getElementById('new-signal-btn');
+const showPrivateCb = document.getElementById('show-private-cb');
+const metaEl = document.querySelector('.meta');
+
+const nodeRingScale = 0.72;
+const privateRingScale = 1.12;
+const r = (DATA.node_radius / 520) * nodeRingScale;
+const PRIV_FILL = { inactive: '#334155', correct: '#22c55e', wrong: '#ef4444' };
+const nodeEls = [];
+const privateEls = [];
+
+const privateFragment = document.createDocumentFragment();
+const nodeFragment = document.createDocumentFragment();
+DATA.positions.forEach((p, i) => {
+  const cx = p[0] * nodeRingScale;
+  const cy = p[1] * nodeRingScale;
+  const px = p[0] * privateRingScale;
+  const py = p[1] * privateRingScale;
+  const priv = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  priv.setAttribute('cx', String(px));
+  priv.setAttribute('cy', String(py));
+  priv.setAttribute('r', String(r));
+  priv.classList.add('private-signal', 'inactive');
+  priv.setAttribute('fill', PRIV_FILL.inactive);
+  priv.dataset.idx = String(i);
+  privateFragment.appendChild(priv);
+  privateEls.push(priv);
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('cx', cx);
+  circle.setAttribute('cy', cy);
+  circle.setAttribute('r', r);
+  circle.classList.add('node');
+  circle.dataset.idx = String(i);
+  nodeFragment.appendChild(circle);
+  nodeEls.push(circle);
+});
+privateG.appendChild(privateFragment);
+nodesG.appendChild(nodeFragment);
+
+function edgeLineCoords(u, v) {
+  const p0 = DATA.positions[u];
+  const p1 = DATA.positions[v];
+  const x0 = p0[0] * nodeRingScale;
+  const y0 = p0[1] * nodeRingScale;
+  const x1 = p1[0] * nodeRingScale;
+  const y1 = p1[1] * nodeRingScale;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) return [x0, y0, x1, y1];
+  const ux = dx / len;
+  const uy = dy / len;
+  return [x0 + ux * r, y0 + uy * r, x1 - ux * r, y1 - uy * r];
+}
+
+function viewToCanvas(x, y) {
+  const pt = svg.createSVGPoint();
+  pt.x = x;
+  pt.y = y;
+  const screenPt = pt.matrixTransform(svg.getScreenCTM());
+  const canvasRect = edgeCanvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  return [
+    (screenPt.x - canvasRect.left) * dpr,
+    (screenPt.y - canvasRect.top) * dpr,
+  ];
+}
+
+function drawEdges() {
+  const rect = edgeCanvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  edgeCanvas.width = Math.round(rect.width * dpr);
+  edgeCanvas.height = Math.round(rect.height * dpr);
+  const ctx = edgeCanvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, edgeCanvas.width, edgeCanvas.height);
+  ctx.strokeStyle = 'rgba(203, 213, 225, 0.4)';
+  ctx.lineWidth = Math.max(0.5 * dpr, 1);
+  ctx.lineCap = 'round';
+
+  if (DATA.edge_hint === 'complete' || DATA.edge_hint === 'dense') {
+    const [cx, cy] = viewToCanvas(0, 0);
+    const [rx, ry] = viewToCanvas(nodeRingScale, 0);
+    const ringR = Math.hypot(rx - cx, ry - cy);
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+    return;
+  }
+
+  ctx.beginPath();
+  for (const [u, v] of DATA.edges) {
+    const [x1, y1, x2, y2] = edgeLineCoords(u, v);
+    const [cx1, cy1] = viewToCanvas(x1, y1);
+    const [cx2, cy2] = viewToCanvas(x2, y2);
+    ctx.moveTo(cx1, cy1);
+    ctx.lineTo(cx2, cy2);
+  }
+  ctx.stroke();
+}
+
+drawEdges();
+window.addEventListener('resize', drawEdges);
+
+if (!DATA.episodes) {
+  DATA.episodes = [{
+    episode_seed: DATA.episode_seed ?? 0,
+    theta: DATA.theta,
+    correct: DATA.correct,
+    consensus: DATA.consensus,
+  }];
+}
+
+function unpackBitmap2D(ep, existingKey, shapeKey, packedKey, asBool) {
+  if (ep[existingKey]) return ep[existingKey];
+  if (!ep[packedKey] || !ep[shapeKey]) return null;
+  const [rounds, nodes] = ep[shapeKey];
+  const raw = atob(ep[packedKey]);
+  const bits = [];
+  const needed = rounds * nodes;
+  for (let i = 0; i < raw.length && bits.length < needed; i++) {
+    const byte = raw.charCodeAt(i);
+    for (let b = 7; b >= 0 && bits.length < needed; b--) bits.push((byte >> b) & 1);
+  }
+  const out = [];
+  for (let t = 0; t < rounds; t++) {
+    const row = [];
+    for (let n = 0; n < nodes; n++) {
+      const bit = bits[t * nodes + n];
+      row.push(asBool ? Boolean(bit) : bit);
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+DATA.episodes.forEach((ep) => {
+  ep.correct = unpackBitmap2D(ep, 'correct', 'correct_shape', 'correct_packed', true);
+  ep.private = unpackBitmap2D(ep, 'private', 'private_shape', 'private_packed', false);
+});
+
+const playhead = document.createElement('div');
+playhead.id = 'playhead';
+timeline.appendChild(playhead);
+
+const T = DATA.max_horizon;
+let activeEpisodeIdx = 0;
+
+function getEpisode() {
+  return DATA.episodes[activeEpisodeIdx];
+}
+
+function updateMetaLine() {
+  const ep = getEpisode();
+  const base = metaEl.dataset.base || metaEl.textContent;
+  if (!metaEl.dataset.base) metaEl.dataset.base = base;
+  metaEl.textContent = `${base} · episode seed=${ep.episode_seed} · θ=${ep.theta}`;
+}
+
+function buildTimeline() {
+  timeline.querySelectorAll('.tl-consensus, .tl-marker').forEach((el) => el.remove());
+  const consensus = getEpisode().consensus;
+  consensus.per_round.forEach((row, idx) => {
+    if (!row.unanimous) return;
+    const seg = document.createElement('div');
+    seg.className = 'tl-consensus ' + (row.unanimous_correct ? 'ok' : 'bad');
+    const left = ((idx) / T) * 100;
+    const width = (1 / T) * 100;
+    seg.style.left = left + '%';
+    seg.style.width = Math.max(width, 0.4) + '%';
+    timeline.appendChild(seg);
+  });
+  if (consensus.first_unanimous_t != null) {
+    const m = document.createElement('div');
+    m.className = 'tl-marker';
+    m.style.left = ((consensus.first_unanimous_t - 0.5) / T) * 100 + '%';
+    timeline.appendChild(m);
+  }
+}
+
+function consensusText(tIdx) {
+  const consensus = getEpisode().consensus;
+  const row = consensus.per_round[tIdx];
+  if (!row.after_gossip) {
+    return 'Prior belief from <strong>private signal only</strong> — no gossip yet';
+  }
+  const first = consensus.first_unanimous_t;
+  const firstOk = consensus.first_unanimous_correct;
+  let line = '';
+  if (row.unanimous) {
+    line = row.unanimous_correct
+      ? 'Unanimous consensus: <strong>yes (correct)</strong>'
+      : 'Unanimous consensus: <strong>yes (wrong)</strong>';
+  } else {
+    line = 'Unanimous consensus: <strong>no</strong>';
+  }
+  if (first != null) {
+    const tag = firstOk ? 'correct' : 'wrong';
+    if (tIdx + 1 >= first) {
+      line += ` &nbsp;|&nbsp; first reached at <strong>t=${first}</strong> (${tag})`;
+    } else {
+      line += ` &nbsp;|&nbsp; first at <strong>t=${first}</strong> (${tag}) — not yet`;
+    }
+  } else {
+    line += ' &nbsp;|&nbsp; unanimous consensus <strong>never reached</strong>';
+  }
+  return line;
+}
+
+let currentRound = null;
+let prevCorrect = null;
+const largeGraph = DATA.num_nodes > 150;
+
+function flashNode(el) {
+  el.classList.remove('flash');
+  el.addEventListener('animationend', () => el.classList.remove('flash'), { once: true });
+  requestAnimationFrame(() => el.classList.add('flash'));
+}
+
+function triggerNodeFlash(correct) {
+  nodeEls.forEach((el, i) => {
+    if (largeGraph && prevCorrect !== null && prevCorrect[i] === correct[i]) return;
+    flashNode(el);
+  });
+}
+
+function updateEvalPlot() {
+  const evalImg = document.getElementById('eval-plot');
+  if (!evalImg) return;
+  const plot = getEpisode().eval_plot;
+  if (plot) evalImg.src = plot;
+}
+
+function setEpisode(idx) {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+    playBtn.textContent = 'Play';
+  }
+  activeEpisodeIdx = idx;
+  episodeSelect.value = String(idx);
+  buildTimeline();
+  currentRound = null;
+  prevCorrect = null;
+  updateMetaLine();
+  updateEvalPlot();
+  renderRound(1);
+}
+
+function pickNewSignal() {
+  if (DATA.episodes.length <= 1) return;
+  let next = activeEpisodeIdx;
+  while (next === activeEpisodeIdx) {
+    next = Math.floor(Math.random() * DATA.episodes.length);
+  }
+  setEpisode(next);
+}
+
+function renderPrivateSignals() {
+  const show = showPrivateCb.checked;
+  privateG.classList.toggle('hidden', !show);
+  if (!show) return;
+  const ep = getEpisode();
+  const tOneBased = currentRound ?? 1;
+  const tIdx = tOneBased - 1;
+  const privateRow = ep.private ? ep.private[tIdx] : null;
+  const theta = ep.theta;
+  privateEls.forEach((el, i) => {
+    el.classList.remove('inactive', 'correct', 'wrong');
+    if (!privateRow) {
+      el.classList.add('inactive');
+      el.setAttribute('fill', PRIV_FILL.inactive);
+      return;
+    }
+    const signalCorrect = Number(privateRow[i]) === theta;
+    if (signalCorrect) {
+      el.classList.add('correct');
+      el.setAttribute('fill', PRIV_FILL.correct);
+    } else {
+      el.classList.add('wrong');
+      el.setAttribute('fill', PRIV_FILL.wrong);
+    }
+  });
+}
+
+function renderRound(tOneBased) {
+  const ep = getEpisode();
+  const tIdx = tOneBased - 1;
+  const correct = ep.correct[tIdx];
+  const roundChanged = currentRound !== null && currentRound !== tOneBased;
+  currentRound = tOneBased;
+  nodeEls.forEach((el, i) => {
+    el.classList.toggle('correct', correct[i]);
+    el.classList.toggle('wrong', !correct[i]);
+  });
+  if (roundChanged) triggerNodeFlash(correct);
+  prevCorrect = correct.slice();
+  const err = 1 - correct.filter(Boolean).length / DATA.num_nodes;
+  const agree = ep.consensus.per_round[tIdx].agreement_fraction;
+  statusEl.innerHTML =
+    `<strong>θ=${ep.theta}</strong> &nbsp;|&nbsp; error=${(err * 100).toFixed(1)}%` +
+    ` &nbsp;|&nbsp; agreement=${(agree * 100).toFixed(1)}%<br/>` +
+    consensusText(tIdx);
+  roundLabel.textContent = tOneBased === 1
+    ? `Round 1 / ${T} (prior)`
+    : `Round ${tOneBased} / ${T}`;
+  slider.value = String(tOneBased);
+  playhead.style.left = ((tOneBased - 0.5) / T) * 100 + '%';
+  prevBtn.disabled = tOneBased <= 1;
+  nextBtn.disabled = tOneBased >= T;
+  renderPrivateSignals();
+}
+
+slider.addEventListener('input', () => renderRound(Number(slider.value)));
+showPrivateCb.addEventListener('change', renderPrivateSignals);
+
+prevBtn.addEventListener('click', () => {
+  const t = Number(slider.value);
+  if (t > 1) renderRound(t - 1);
+});
+
+nextBtn.addEventListener('click', () => {
+  const t = Number(slider.value);
+  if (t < T) renderRound(t + 1);
+});
+
+timeline.addEventListener('click', (ev) => {
+  const rect = timeline.getBoundingClientRect();
+  const frac = (ev.clientX - rect.left) / rect.width;
+  const t = Math.min(T, Math.max(1, Math.round(frac * T)));
+  renderRound(t);
+});
+
+let timer = null;
+playBtn.addEventListener('click', () => {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+    playBtn.textContent = 'Play';
+    return;
+  }
+  playBtn.textContent = 'Pause';
+  timer = setInterval(() => {
+    let t = Number(slider.value) + 1;
+    if (t > T) t = 1;
+    renderRound(t);
+  }, 500);
+});
+
+DATA.episodes.forEach((ep, idx) => {
+  const opt = document.createElement('option');
+  opt.value = String(idx);
+  opt.textContent = `seed ${ep.episode_seed} (θ=${ep.theta})`;
+  episodeSelect.appendChild(opt);
+});
+episodeSelect.addEventListener('change', () => setEpisode(Number(episodeSelect.value)));
+newSignalBtn.addEventListener('click', pickNewSignal);
+newSignalBtn.disabled = DATA.episodes.length <= 1;
+episodeSelect.disabled = DATA.episodes.length <= 1;
+
+const plotLightbox = document.getElementById('plot-lightbox');
+const plotLightboxImg = document.getElementById('plot-lightbox-img');
+const plotLightboxClose = document.getElementById('plot-lightbox-close');
+
+function openPlotLightbox(src, alt) {
+  if (!src) return;
+  plotLightboxImg.src = src;
+  plotLightboxImg.alt = alt || 'Plot';
+  plotLightbox.classList.add('open');
+  plotLightbox.hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function closePlotLightbox() {
+  plotLightbox.classList.remove('open');
+  plotLightbox.hidden = true;
+  plotLightboxImg.removeAttribute('src');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('click', (ev) => {
+  const img = ev.target.closest('.eval-plot');
+  if (!img || !img.getAttribute('src')) return;
+  openPlotLightbox(img.src, img.alt);
+});
+plotLightboxClose.addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  closePlotLightbox();
+});
+plotLightbox.addEventListener('click', (ev) => {
+  if (ev.target === plotLightbox) closePlotLightbox();
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && plotLightbox.classList.contains('open')) closePlotLightbox();
+});
+
+buildTimeline();
+updateMetaLine();
+renderRound(1);
+renderPrivateSignals();
+</script>
+</body>
+</html>

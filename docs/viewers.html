@@ -86,8 +86,9 @@
   <div class="toolbar">
     <label>Model
       <select id="mode">
-        <option value="fair_1bit">fair_1bit</option>
-        <option value="vector">vector</option>
+        <option value="fair_1bit">fair_1bit (RGAT)</option>
+        <option value="vector">vector (RGAT)</option>
+        <option value="majority_vote">majority vote baseline</option>
       </select>
     </label>
     <label>Size n
@@ -138,7 +139,9 @@
       const raw = location.hash.replace(/^#/, "");
       if (!raw) return;
       const [mode, nPart, topo] = raw.split("|");
-      if (mode && (mode === "fair_1bit" || mode === "vector")) modeEl.value = mode;
+      if (mode && (mode === "fair_1bit" || mode === "vector" || mode === "majority_vote")) {
+        modeEl.value = mode;
+      }
       if (nPart && nPart.startsWith("n")) sizeEl.value = nPart.slice(1);
       if (topo) topoEl.value = topo;
     }
