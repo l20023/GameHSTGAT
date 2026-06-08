@@ -29,10 +29,13 @@ def _build_learning_rate_suptitle(
     epsilon_inf: float | None,
     fit_success: bool,
     convergence_warning_threshold: float,
+    algorithm_label: str | None = None,
 ) -> str:
     """Assemble the figure suptitle including quality and bound flags."""
     anchor_label = rf"shared origin $t={FIT_START_T}$ (fit from $t\geq {FIT_START_T}$)"
     parts = [f"{condition_key}  |  q={signal_quality:.2f}  |  anchor={anchor_label}"]
+    if algorithm_label:
+        parts.insert(0, algorithm_label)
 
     if isinstance(beta_gap, float) and np.isfinite(beta_gap):
         parts.append(f"gap={beta_gap:.3f}")
@@ -82,6 +85,7 @@ def save_learning_rate_plot(
     exceeds_hst_bound: bool | None = None,
     convergence_warning: bool = False,
     convergence_warning_threshold: float = DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
+    algorithm_label: str | None = None,
 ) -> Path:
     """
     Render a dual-panel decay plot for one condition.
@@ -324,6 +328,7 @@ def save_learning_rate_plot(
         epsilon_inf=epsilon_inf_value,
         fit_success=fit_success,
         convergence_warning_threshold=convergence_warning_threshold,
+        algorithm_label=algorithm_label,
     )
     fig.suptitle(suptitle, fontsize=11)
 

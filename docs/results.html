@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Results — GameHSTGAT</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --border: #334155;
+      --good: #4ade80;
+      --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1.25rem 1.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 0.35rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin: 0; }
+    .sub a { color: var(--accent); }
+    nav.site-nav {
+      display: flex;
+      gap: 1rem;
+      padding: 0.65rem 1.5rem;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    nav.site-nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    nav.site-nav a.active, nav.site-nav a:hover {
+      color: var(--accent);
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-end;
+      padding: 1rem 1.5rem;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.9rem;
+      min-width: 9rem;
+    }
+    main { padding: 1.25rem 1.5rem 2rem; }
+    section { margin-bottom: 2rem; }
+    section h2 {
+      font-size: 1rem;
+      margin: 0 0 0.75rem;
+      color: var(--text);
+    }
+    .plot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+    .plot-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .plot-card header {
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .plot-card img {
+      width: 100%;
+      display: block;
+      cursor: zoom-in;
+      background: #fff;
+    }
+    .headline {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .headline .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+    }
+    .headline .card h3 {
+      margin: 0 0 0.35rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .headline .card p {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.5rem 0.65rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    th { color: var(--muted); font-weight: 500; }
+    tr:last-child td { border-bottom: 0; }
+    .rate-good { color: var(--good); }
+    .rate-warn { color: var(--warn); }
+    .plot-lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.92);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1.5rem;
+    }
+    .plot-lightbox.open { display: flex; }
+    .plot-lightbox img {
+      max-width: min(96vw, 1400px);
+      max-height: 92vh;
+      background: #fff;
+      border-radius: 8px;
+    }
+    .plot-lightbox-close {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 1.5rem;
+      width: 2.5rem;
+      height: 2.5rem;
+      cursor: pointer;
+    }
+    .note { color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Experiment results</h1>
+    <p class="sub">
+      Aggregated β fits vs HST bound ·
+      <a href="https://github.com/l20023/GameHSTGAT">repository</a>
+    </p>
+  </header>
+  <nav class="site-nav">
+    <a href="viewers.html">Episode viewers</a>
+    <a href="results.html" class="active">Results &amp; plots</a>
+  </nav>
+  <div class="toolbar">
+    <label>Algorithm
+      <select id="algorithm">
+        <option value="fair_1bit">fair_1bit (RGAT)</option>
+        <option value="vector">vector (RGAT)</option>
+        <option value="majority_vote">majority vote baseline</option>
+      </select>
+    </label>
+    <label>Per-run plot · n
+      <select id="plot-n">
+        <option value="10">10</option>
+        <option value="100">100</option>
+        <option value="1000">1000</option>
+      </select>
+    </label>
+    <label>q
+      <select id="plot-q">
+        <option value="0.55">0.55</option>
+        <option value="0.65">0.65</option>
+        <option value="0.8">0.8</option>
+      </select>
+    </label>
+    <label>seed
+      <select id="plot-seed">
+        <option value="0">0</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select>
+    </label>
+    <label>topology
+      <select id="plot-topo">
+        <option value="complete">complete</option>
+        <option value="ws_p_0.0">ws_p_0.0</option>
+        <option value="ws_p_0.1">ws_p_0.1</option>
+      </select>
+    </label>
+  </div>
+  <main>
+    <section>
+      <h2>Headline · n=1000, q=0.55, complete</h2>
+      <div class="headline" id="headline"></div>
+    </section>
+    <section>
+      <h2>Cross-seed aggregate plots</h2>
+      <div class="plot-grid">
+        <article class="plot-card">
+          <header>β vs signal quality q</header>
+          <img id="plot-beta-q" alt="beta vs q" data-plot="beta_vs_q"/>
+        </article>
+        <article class="plot-card">
+          <header>β vs network size n</header>
+          <img id="plot-beta-n" alt="beta vs n" data-plot="beta_vs_n"/>
+        </article>
+      </div>
+      <p class="note">Click a plot for fullscreen. Fits use anchor t=2; HST reference shares α and ε∞ at t=2.</p>
+    </section>
+    <section>
+      <h2>Per-condition summary (selected algorithm)</h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>n</th><th>q</th><th>topology</th>
+              <th>β mean</th><th>β std</th><th>exceed rate</th><th>conv. warn rate</th>
+            </tr>
+          </thead>
+          <tbody id="summary-body"></tbody>
+        </table>
+      </div>
+    </section>
+    <section id="per-run-section">
+      <h2>Per-run learning-rate plot</h2>
+      <div class="plot-card">
+        <header id="per-run-caption">—</header>
+        <img id="per-run-plot" alt="per-run learning rate plot"/>
+      </div>
+    </section>
+  </main>
+  <div id="plot-lightbox" class="plot-lightbox" role="dialog" aria-modal="true" hidden>
+    <button type="button" class="plot-lightbox-close" id="plot-lightbox-close" aria-label="Close">&times;</button>
+    <img id="plot-lightbox-img" alt=""/>
+  </div>
+  <script>
+    const PAGES_BASE = "https://l20023.github.io/GameHSTGAT";
+    const algorithmEl = document.getElementById("algorithm");
+    const plotNEl = document.getElementById("plot-n");
+    const plotQEl = document.getElementById("plot-q");
+    const plotSeedEl = document.getElementById("plot-seed");
+    const plotTopoEl = document.getElementById("plot-topo");
+    const headlineEl = document.getElementById("headline");
+    const summaryBody = document.getElementById("summary-body");
+    const perRunSection = document.getElementById("per-run-section");
+    const perRunPlot = document.getElementById("per-run-plot");
+    const perRunCaption = document.getElementById("per-run-caption");
+    const plotBetaQ = document.getElementById("plot-beta-q");
+    const plotBetaN = document.getElementById("plot-beta-n");
+    const plotLightbox = document.getElementById("plot-lightbox");
+    const plotLightboxImg = document.getElementById("plot-lightbox-img");
+    const plotLightboxClose = document.getElementById("plot-lightbox-close");
+
+    const METRICS_ROOT = {
+      fair_1bit: "artifacts/training_metrics_fair/grid_runs",
+      vector: "artifacts/training_metrics_vector/grid_runs",
+      majority_vote: "artifacts/training_metrics_majority/grid_runs",
+    };
+
+    let resultsData = null;
+
+    function qKey(q) {
+      return String(q).replace(".", "p");
+    }
+
+    function rel(path) {
+      return `../${path}`;
+    }
+
+    function formatRate(value) {
+      if (value == null || Number.isNaN(value)) return "—";
+      return `${Math.round(value * 100)}%`;
+    }
+
+    function formatBeta(value) {
+      if (value == null || Number.isNaN(value)) return "—";
+      return value.toFixed(3);
+    }
+
+    function findRow(rows, n, q, topo) {
+      return rows.find((row) =>
+        row.num_nodes === n &&
+        Math.abs(row.signal_quality - q) < 1e-6 &&
+        row.topology === topo
+      );
+    }
+
+    function renderHeadline() {
+      headlineEl.innerHTML = "";
+      const configs = [
+        { key: "fair_1bit", label: "RGAT fair_1bit" },
+        { key: "vector", label: "RGAT vector" },
+        { key: "majority_vote", label: "Majority vote" },
+      ];
+      for (const { key, label } of configs) {
+        const row = findRow(resultsData.algorithms[key] || [], 1000, 0.55, "complete");
+        const card = document.createElement("article");
+        card.className = "card";
+        const exceed = row ? row.exceeds_hst_bound_rate : null;
+        const beta = row ? row.beta_gat_mean : null;
+        const conv = row ? row.convergence_warning_rate : null;
+        card.innerHTML = `
+          <h3>${label}</h3>
+          <p>β̂=${formatBeta(beta)} · exceed ${formatRate(exceed)}</p>
+          <p style="font-size:0.8rem;font-weight:400;color:var(--muted);margin-top:0.35rem">
+            conv. warning ${formatRate(conv)}
+          </p>`;
+        headlineEl.appendChild(card);
+      }
+    }
+
+    function renderSummaryTable() {
+      const algo = algorithmEl.value;
+      const rows = (resultsData.algorithms[algo] || []).slice().sort((a, b) => {
+        if (a.signal_quality !== b.signal_quality) return a.signal_quality - b.signal_quality;
+        if (a.num_nodes !== b.num_nodes) return a.num_nodes - b.num_nodes;
+        return a.topology.localeCompare(b.topology);
+      });
+      summaryBody.innerHTML = rows.map((row) => {
+        const exceedClass = (row.exceeds_hst_bound_rate || 0) > 0 ? "rate-good" : "";
+        const convClass = (row.convergence_warning_rate || 0) > 0.5 ? "rate-warn" : "";
+        return `<tr>
+          <td>${row.num_nodes}</td>
+          <td>${row.signal_quality}</td>
+          <td>${row.topology}</td>
+          <td>${formatBeta(row.beta_gat_mean)}</td>
+          <td>${formatBeta(row.beta_gat_std)}</td>
+          <td class="${exceedClass}">${formatRate(row.exceeds_hst_bound_rate)}</td>
+          <td class="${convClass}">${formatRate(row.convergence_warning_rate)}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    function updateAggregatePlots() {
+      const algo = algorithmEl.value;
+      const paths = resultsData.aggregate_plot_paths[algo];
+      plotBetaQ.src = rel(paths.beta_vs_q);
+      plotBetaN.src = rel(paths.beta_vs_n);
+    }
+
+    function perRunPlotPath() {
+      const algo = algorithmEl.value;
+      const n = plotNEl.value;
+      const q = plotQEl.value;
+      const seed = plotSeedEl.value;
+      const topo = plotTopoEl.value;
+      const root = METRICS_ROOT[algo];
+      const qFolder = `q_${qKey(q)}`;
+      let fileName;
+      if (topo === "complete") {
+        fileName = `n_${n}__complete__anchored_t2.png`;
+      } else {
+        fileName = `n_${n}__${topo}_seed_${seed}__anchored_t2.png`;
+      }
+      return `${root}/n_${n}/${qFolder}/seed_${seed}/plots/${fileName}`;
+    }
+
+    function updatePerRunPlot() {
+      const algo = algorithmEl.value;
+      perRunSection.style.display = "";
+      const path = perRunPlotPath();
+      perRunPlot.src = rel(path);
+      perRunCaption.textContent = path;
+      perRunPlot.onclick = () => openLightbox(perRunPlot.src);
+    }
+
+    function openLightbox(src) {
+      plotLightboxImg.src = src;
+      plotLightbox.classList.add("open");
+      plotLightbox.hidden = false;
+    }
+
+    function closeLightbox() {
+      plotLightbox.classList.remove("open");
+      plotLightbox.hidden = true;
+      plotLightboxImg.src = "";
+    }
+
+    function applyHash() {
+      const raw = location.hash.replace(/^#/, "");
+      if (!raw) return;
+      const parts = raw.split("|");
+      if (parts[0]) algorithmEl.value = parts[0];
+      if (parts[1] && parts[1].startsWith("n")) plotNEl.value = parts[1].slice(1);
+      if (parts[2]) plotQEl.value = parts[2];
+      if (parts[3]) plotSeedEl.value = parts[3];
+      if (parts[4]) plotTopoEl.value = parts[4];
+    }
+
+    function updateHash() {
+      const hash = [
+        algorithmEl.value,
+        `n${plotNEl.value}`,
+        plotQEl.value,
+        plotSeedEl.value,
+        plotTopoEl.value,
+      ].join("|");
+      history.replaceState(null, "", `#${hash}`);
+    }
+
+    function refresh() {
+      updateAggregatePlots();
+      renderSummaryTable();
+      updatePerRunPlot();
+      updateHash();
+    }
+
+    async function init() {
+      const response = await fetch("results-data.json");
+      resultsData = await response.json();
+      renderHeadline();
+      applyHash();
+      refresh();
+      [algorithmEl, plotNEl, plotQEl, plotSeedEl, plotTopoEl].forEach((el) => {
+        el.addEventListener("change", refresh);
+      });
+      [plotBetaQ, plotBetaN].forEach((img) => {
+        img.addEventListener("click", () => openLightbox(img.src));
+      });
+      plotLightboxClose.addEventListener("click", closeLightbox);
+      plotLightbox.addEventListener("click", (event) => {
+        if (event.target === plotLightbox) closeLightbox();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeLightbox();
+      });
+    }
+
+    init().catch((error) => {
+      headlineEl.innerHTML = `<p class="note">Failed to load results-data.json: ${error}</p>`;
+    });
+  </script>
+</body>
+</html>

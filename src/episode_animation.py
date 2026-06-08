@@ -659,6 +659,47 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     display: block;
     border-radius: 8px;
     background: #fff;
+    cursor: zoom-in;
+  }}
+  .plot-lightbox {{
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: rgba(15, 23, 42, 0.92);
+  }}
+  .plot-lightbox.open {{
+    display: flex;
+  }}
+  .plot-lightbox img {{
+    max-width: min(96vw, 1400px);
+    max-height: 92vh;
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
+  }}
+  .plot-lightbox-close {{
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1001;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+  }}
+  .plot-lightbox-close:hover {{
+    border-color: var(--accent);
   }}
 </style>
 </head>
@@ -712,6 +753,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     {summary_plot_section}
   </aside>
 </main>
+<div id="plot-lightbox" class="plot-lightbox" role="dialog" aria-modal="true" aria-label="Plot fullscreen" hidden>
+  <button type="button" class="plot-lightbox-close" id="plot-lightbox-close" aria-label="Close">&times;</button>
+  <img id="plot-lightbox-img" alt=""/>
+</div>
 <script>
 const DATA = {payload_json};
 
@@ -1088,6 +1133,42 @@ newSignalBtn.addEventListener('click', pickNewSignal);
 newSignalBtn.disabled = DATA.episodes.length <= 1;
 episodeSelect.disabled = DATA.episodes.length <= 1;
 
+const plotLightbox = document.getElementById('plot-lightbox');
+const plotLightboxImg = document.getElementById('plot-lightbox-img');
+const plotLightboxClose = document.getElementById('plot-lightbox-close');
+
+function openPlotLightbox(src, alt) {{
+  if (!src) return;
+  plotLightboxImg.src = src;
+  plotLightboxImg.alt = alt || 'Plot';
+  plotLightbox.classList.add('open');
+  plotLightbox.hidden = false;
+  document.body.style.overflow = 'hidden';
+}}
+
+function closePlotLightbox() {{
+  plotLightbox.classList.remove('open');
+  plotLightbox.hidden = true;
+  plotLightboxImg.removeAttribute('src');
+  document.body.style.overflow = '';
+}}
+
+document.addEventListener('click', (ev) => {{
+  const img = ev.target.closest('.eval-plot');
+  if (!img || !img.getAttribute('src')) return;
+  openPlotLightbox(img.src, img.alt);
+}});
+plotLightboxClose.addEventListener('click', (ev) => {{
+  ev.stopPropagation();
+  closePlotLightbox();
+}});
+plotLightbox.addEventListener('click', (ev) => {{
+  if (ev.target === plotLightbox) closePlotLightbox();
+}});
+document.addEventListener('keydown', (ev) => {{
+  if (ev.key === 'Escape' && plotLightbox.classList.contains('open')) closePlotLightbox();
+}});
+
 buildTimeline();
 updateMetaLine();
 renderRound(1);
@@ -1108,7 +1189,7 @@ def _eval_plot_section(eval_plot_filename: str | None) -> str:
     (this episode rollout, not a test-set mean). GAT and HST curves share α and ε∞
     at <strong>t=2</strong>; fits use rounds t≥2.
   </p>
-  <img id="eval-plot" class="eval-plot" src="{eval_plot_filename}" alt="Anchored t=2 learning-rate plot"/>
+  <img id="eval-plot" class="eval-plot" src="{eval_plot_filename}" alt="Anchored t=2 learning-rate plot" title="Click to enlarge"/>
 </details>"""
 
 
@@ -1122,7 +1203,7 @@ def _summary_plot_section(summary_plot_filename: str | None) -> str:
     evaluation (<code>metrics.json</code>). Same anchored t=2 GAT/HST comparison as
     in the paper-style plots.
   </p>
-  <img id="summary-plot" class="eval-plot" src="{summary_plot_filename}" alt="Test-set mean anchored t=2 plot"/>
+  <img id="summary-plot" class="eval-plot" src="{summary_plot_filename}" alt="Test-set mean anchored t=2 plot" title="Click to enlarge"/>
 </details>"""
 
 

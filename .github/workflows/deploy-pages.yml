@@ -1,4 +1,4 @@
-# Publish interactive HTML viewers to GitHub Pages.
+# Publish interactive HTML viewers and experiment results to GitHub Pages.
 # One-time: repo Settings → Pages → Build and deployment → Source: GitHub Actions
 name: Deploy GitHub Pages
 
@@ -31,10 +31,34 @@ jobs:
 
       - name: Build site artifact
         run: |
+          set -euo pipefail
           mkdir -p _site/docs _site/artifacts
           cp -r docs/. _site/docs/
           cp -r artifacts/animations _site/artifacts/animations
           cp index.html .nojekyll _site/
+
+          python3 scripts/export_results_data.py
+
+          copy_grid_assets() {
+            local root="$1"
+            if [ ! -d "$root" ]; then
+              return 0
+            fi
+            if [ -d "$root/aggregate_plots" ]; then
+              mkdir -p "_site/$root"
+              cp -r "$root/aggregate_plots" "_site/$root/"
+            fi
+            find "$root" -path '*/seed_*/plots/*.png' -print0 | while IFS= read -r -d '' png; do
+              rel="${png#artifacts/}"
+              dest="_site/artifacts/${rel}"
+              mkdir -p "$(dirname "$dest")"
+              cp "$png" "$dest"
+            done
+          }
+
+          copy_grid_assets artifacts/training_metrics_fair/grid_runs
+          copy_grid_assets artifacts/training_metrics_vector/grid_runs
+          copy_grid_assets artifacts/training_metrics_majority/grid_runs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

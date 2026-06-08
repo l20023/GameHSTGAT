@@ -11,6 +11,11 @@ import torch
 from torch_geometric.data import Data
 
 from .hst_bound import compute_beta_hst_max
+from .majority_vote_baseline import (
+    build_adjacency_matrix,
+    build_neighbor_lists,
+    rollout_majority_vote_episode,
+)
 from .models import RecurrentGATAgent, SharedSequentialLoss
 from .signal_generator import PrivateSignalGenerator
 
@@ -481,6 +486,76 @@ def evaluate_test_episodes(
     return epsilon, consensus
 
 
+def evaluate_majority_baseline_episodes(
+    *,
+    graph_data: Data,
+    test_episodes: int,
+    max_horizon: int,
+    signal_quality: float,
+    seed: int,
+    include_consensus_series: bool = False,
+) -> tuple[list[float], dict[str, Any]]:
+    """Evaluate cumulative majority-vote baseline on test episodes."""
+    num_nodes = int(graph_data.num_nodes)
+    neighbors = build_neighbor_lists(num_nodes, graph_data.edge_index.cpu())
+    adjacency = build_adjacency_matrix(neighbors)
+    signal_generator = PrivateSignalGenerator(signal_quality=signal_quality, default_seed=seed)
+    error_counts = np.zeros(max_horizon, dtype=np.float64)
+    total_predictions_per_t = float(test_episodes * num_nodes)
+    unanimous_acc = _new_consensus_mode_accumulator(max_horizon)
+    majority_acc = _new_consensus_mode_accumulator(max_horizon)
+    episode_rng = np.random.default_rng(seed)
+
+    for episode_idx in range(test_episodes):
+        episode = signal_generator.generate_episode(
+            num_nodes=num_nodes,
+            max_horizon=max_horizon,
+            seed=_episode_seed(seed, episode_idx, offset=TEST_EPISODE_OFFSET),
+        )
+        theta = int(episode["theta"])
+        private_signals = episode["private_signals"]
+        if not isinstance(private_signals, torch.Tensor):
+            raise ValueError("episode['private_signals'] must be a torch.Tensor.")
+
+        predictions = rollout_majority_vote_episode(
+            private_signals,
+            neighbors,
+            max_horizon=max_horizon,
+            rng=episode_rng,
+            adjacency=adjacency,
+        )
+        errors_per_t = (predictions != theta).sum(dim=1).numpy().astype(np.float64)
+        error_counts += errors_per_t
+
+        flags_per_t = [
+            _consensus_flags_at_timestep(predictions[t], theta=theta, num_nodes=num_nodes)
+            for t in range(max_horizon)
+        ]
+        _update_consensus_mode_accumulator(
+            unanimous_acc, max_horizon=max_horizon, flags_per_t=flags_per_t, mode="unanimous"
+        )
+        _update_consensus_mode_accumulator(
+            majority_acc, max_horizon=max_horizon, flags_per_t=flags_per_t, mode="majority"
+        )
+
+    epsilon = (error_counts / total_predictions_per_t).tolist()
+    consensus = {
+        "unanimous": _finalize_consensus_mode_metrics(
+            unanimous_acc,
+            test_episodes=test_episodes,
+            max_horizon=max_horizon,
+            include_series=include_consensus_series,
+        ),
+        "majority": _finalize_consensus_mode_metrics(
+            majority_acc,
+            test_episodes=test_episodes,
+            max_horizon=max_horizon,
+            include_series=include_consensus_series,
+        ),
+    }
+    return epsilon, consensus
+
+
 def compute_epsilon_series(
     *,
     model: RecurrentGATAgent,
@@ -901,6 +976,64 @@ def run_condition_experiment(
     )
 
 
+def run_majority_baseline_condition(
+    *,
+    graph_data: Data,
+    test_episodes: int,
+    max_horizon: int,
+    signal_quality: float,
+    seed: int,
+    disable_beta_fit: bool = False,
+    convergence_warning_threshold: float = DEFAULT_CONVERGENCE_WARNING_THRESHOLD,
+    include_consensus_series: bool = False,
+) -> ConditionRunResult:
+    """Evaluate cumulative majority-vote baseline (no training) for one graph condition."""
+    epsilon_series, consensus = evaluate_majority_baseline_episodes(
+        graph_data=graph_data,
+        test_episodes=test_episodes,
+        max_horizon=max_horizon,
+        signal_quality=signal_quality,
+        seed=seed,
+        include_consensus_series=include_consensus_series,
+    )
+    if disable_beta_fit:
+        beta_fit: dict[str, float | bool | str] = _empty_fit_result("disabled", "disabled")
+    else:
+        beta_fit = fit_beta_from_epsilon(epsilon_series)
+
+    beta_hst_max = compute_beta_hst_max(signal_quality)
+    epsilon_inf_value = beta_fit.get("epsilon_inf")
+    convergence_warning = bool(
+        isinstance(epsilon_inf_value, (int, float))
+        and np.isfinite(float(epsilon_inf_value))
+        and float(epsilon_inf_value) > convergence_warning_threshold
+    )
+    beta_gap: float | None = None
+    exceeds_hst_bound: bool | None = None
+    if bool(beta_fit.get("fit_success", False)):
+        beta_gat_raw = beta_fit.get("beta")
+        if isinstance(beta_gat_raw, (int, float)) and np.isfinite(float(beta_gat_raw)):
+            beta_gap = float(beta_gat_raw) - beta_hst_max
+            exceeds_hst_bound = (beta_gap > 0.0) and not convergence_warning
+
+    return ConditionRunResult(
+        train_loss_history=[],
+        epsilon_series=epsilon_series,
+        consensus=consensus,
+        beta_fit=beta_fit,
+        beta_hst_max=beta_hst_max,
+        beta_gap=beta_gap,
+        exceeds_hst_bound=exceeds_hst_bound,
+        convergence_warning=convergence_warning,
+        train_loss_running_mean_final=None,
+        best_running_mean_loss=None,
+        best_episode_idx=None,
+        best_validation_error=None,
+        best_validation_episode_idx=None,
+        validation_history=[],
+    )
+
+
 _CONSENSUS_SERIES_KEYS = (
     "consensus_rate_series",
     "correct_consensus_rate_series",
@@ -932,6 +1065,7 @@ def condition_result_to_dict(
     save_train_loss_history: bool = False,
     save_epsilon_series: bool = False,
     save_consensus_series: bool = False,
+    algorithm: str | None = None,
 ) -> dict[str, Any]:
     """Convert dataclass result to JSON-serializable dictionary."""
     payload: dict[str, Any] = {
@@ -955,6 +1089,8 @@ def condition_result_to_dict(
         payload["train_loss_history"] = result.train_loss_history
     if save_epsilon_series:
         payload["epsilon_series"] = result.epsilon_series
+    if algorithm is not None:
+        payload["algorithm"] = algorithm
     return payload
 
 
@@ -964,6 +1100,7 @@ __all__ = [
     "condition_result_to_dict",
     "consensus_to_dict",
     "compute_epsilon_series",
+    "evaluate_majority_baseline_episodes",
     "evaluate_test_episodes",
     "FIT_START_T",
     "anchored_t2_decay_values",
@@ -971,5 +1108,6 @@ __all__ = [
     "hst_alpha_at_t2_intersection",
     "resolve_runtime_device",
     "run_condition_experiment",
+    "run_majority_baseline_condition",
     "train_condition_model",
 ]

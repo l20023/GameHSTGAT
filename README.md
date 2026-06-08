@@ -110,6 +110,28 @@ Smoke test (3 seeds, small grid):
 bash scripts/run_experiment_fair.sh --seeds 0,1,2 --num-nodes-list 10 --signal-quality-list 0.6
 ```
 
+### Majority-vote baseline (CPU, no training)
+
+Cumulative neighbor + private counting baseline aligned with the RGAT protocol (1-bit broadcasts, tie-break with seeded RNG). Evaluates the same grid (**135 cells**: `n×q×5 seeds`, 3 topologies per cell) without GPU training.
+
+```bash
+python scripts/run_majority_baseline_grid.py --all   # skips cells that already have metrics.json
+python scripts/summarize_metrics.py \
+  --root artifacts/training_metrics_majority/grid_runs \
+  --csv artifacts/metrics_summary_majority.csv \
+  --aggregate-csv artifacts/metrics_summary_majority_aggregated.csv \
+  --aggregate-plots-dir artifacts/training_metrics_majority/grid_runs/aggregate_plots
+```
+
+Single seed / SLURM task:
+
+```bash
+python scripts/run_majority_baseline_grid.py --task-index 0
+python scripts/run_majority_baseline.py --seed 0 --num-nodes 10 --signal-quality 0.55
+```
+
+Artifacts: `artifacts/training_metrics_majority/grid_runs/` (metrics JSON + anchored t≥2 plots tagged **majority vote baseline**).
+
 ### SLURM grid runs (cluster)
 
 Parallel submission via SLURM job array (one task = one `(seed, n, q)` cell, all graph conditions in that job).
@@ -207,7 +229,7 @@ Canonical layout (fair channel; vector mirrors under `training_metrics_vector/`)
 | Per-seed plots | `.../seed_*/plots/<condition>__anchored_t2.png` |
 | Cell mean plots | `.../n_*/q_*/plots/<condition>__anchored_t2_aggregated.png` |
 | Aggregate plots | `.../grid_runs/aggregate_plots/beta_vs_{n,q}.png` |
-| **Analysis tables** | `artifacts/metrics_summary_{fair,vector}.csv` (per seed) |
+| **Analysis tables** | `artifacts/metrics_summary_{fair,vector,majority}.csv` (per seed) |
 | Cell rollups | `artifacts/metrics_summary_*_aggregated.csv` (mean over seeds) |
 | Grid overview | `artifacts/grid_summary_{fair,vector}.json` (optional monitoring) |
 
@@ -317,6 +339,17 @@ GitHub README cannot run JavaScript, so viewers are hosted via **[GitHub Pages](
 If **Setup Pages** fails in Actions, step 2 was not done yet.
 
 **[Interactive launcher](https://l20023.github.io/GameHSTGAT/docs/viewers.html)** — pick **model** (fair_1bit / vector), **size** (10 / 100 / 1000), and **topology** (complete / ws_p_0.0 / ws_p_0.1). URL hash is shareable, e.g. `viewers.html#vector|n100|ws_p_0.1`.
+
+**[Results & plots](https://l20023.github.io/GameHSTGAT/docs/results.html)** — aggregate β vs q / β vs n for **fair_1bit**, **vector**, and **majority vote baseline**, plus per-run learning-rate plots. Regenerate data before deploy:
+
+```bash
+python scripts/summarize_metrics.py \
+  --root artifacts/training_metrics_majority/grid_runs \
+  --csv artifacts/metrics_summary_majority.csv \
+  --aggregate-csv artifacts/metrics_summary_majority_aggregated.csv \
+  --aggregate-plots-dir artifacts/training_metrics_majority/grid_runs/aggregate_plots
+python scripts/export_results_data.py
+```
 
 Inside each viewer:
 

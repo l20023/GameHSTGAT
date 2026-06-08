@@ -139,5 +139,7 @@ def test_save_interactive_episode_view_embeds_per_signal_and_summary_plots(
     assert 'src="view__anchored_t2.png"' in html
     assert "Training evaluation summary" in html
     assert "function updateEvalPlot" in html
+    assert 'id="plot-lightbox"' in html
+    assert "function openPlotLightbox" in html
     assert (tmp_path / "view_ep4242__anchored_t2.png").exists()
     assert (tmp_path / "view_ep4243__anchored_t2.png").exists()
